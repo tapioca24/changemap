@@ -1,123 +1,114 @@
-# changemap implementation plan
+# フェーズ0：プロジェクト基盤
 
-## Product goal
+状態：フェーズ0の実装とmacOSでのローカル検証は完了。3 OS × Node.js 2バージョンのCI実行確認待ち。全受け入れ条件の完了とはまだ扱わない。
 
-Provide a local, Difit-like review UI that makes the relationships around changed files easy to see. The first release focuses on TypeScript dependency graphs and a stable graph-plus-code reading experience.
+全体計画は [roadmap.md](roadmap.md)、製品仕様は [design.md](design.md)、引き継ぎは [handoff.md](handoff.md) を参照する。このファイルはフェーズ0だけを扱う。
 
-## Phase 0: project foundation
+## 目的と既定の範囲
 
-- Initialize Backlog.md in the repository and record the first milestone.
-- Create the pnpm TypeScript workspace and package metadata for npm package `changemap`.
-- Use TypeScript as the confirmed implementation language for the CLI, local server, and browser UI.
-- Choose and document the supported Node.js range, build output, executable name, and local server lifecycle.
-- Add English-only README scaffolding with installation and basic CLI examples.
-- Add the test, typecheck, lint, format, and build commands.
+クリーンなチェックアウトからpnpmで導入・ビルドし、`changemap` コマンドを実行できる開発基盤を整える。
 
-Acceptance: a clean checkout installs with pnpm, builds, and exposes a runnable `changemap` binary.
+- Backlog.mdの初期化と最初のマイルストーンの登録。
+- pnpm・TypeScriptのプロジェクト構成とnpmパッケージ `changemap` のメタデータ。
+- Node.js対応範囲、ビルド成果物、実行コマンド名、ローカルサーバーの起動・終了方針。
+- 英語READMEの導入方法とCLI利用例。未実装機能は区別する。
+- test、typecheck、lint、format、buildコマンド。
 
-## Phase 1: diff input and local server
+## 合意済みの判断
 
-- Implement Difit-compatible local Git input modes: default HEAD, target, target plus compare-with, `.`, `staged`, `working`, and `@`.
-- For two-argument input, compare the second argument (before) directly with the first argument (after), using branch tips when branches are specified; do not substitute the merge base. Verify that changes present only in the comparison branch appear reversed in the target.
-- For single-target input, compare the target's parent (before) with the target commit (after); a branch selects its tip commit. Default input and `@` select HEAD under the same rule. For merge commits, use the first parent and include conflict-resolution changes in the resulting diff. For root commits, compare an empty state with the target commit and mark all files as added.
-- Normalize Git status into added, modified, deleted, renamed, and unchanged records.
-- Include non-TypeScript changed files in the review model.
-- Retain changed binary files in the review model with their paths and change statuses, distinguishing unavailable text diffs from empty diffs.
-- Include non-ignored untracked files as added in `.` and `working`; exclude untracked files from `staged` and exclude ignored untracked files from review.
-- For `.`, compare HEAD (before) with the current worktree (after), showing the net result of staged and unstaged changes. Verify that a staged edit reverted to its HEAD content in the worktree produces no diff for that content.
-- For `staged`, compare HEAD (before) with the index (after). Verify that subsequent unstaged edits do not affect the staged diff or captured contents.
-- For `working`, compare the index (before) with the current worktree (after), including non-ignored untracked files as added. Verify that an edit from A to B staged before a further worktree edit to C appears as B to C.
-- Before the first commit, use an empty before state for `.` and `staged`; keep the index-to-worktree comparison for `working`. Default input and `@` must explain that no target commit exists and exit.
-- Serve the React application (confirmed UI technology) from a local server and open the browser by default, with a no-open option.
-- Treat a valid comparison with no changes as an empty review rather than an error; keep the server running and preserve the comparison metadata and update detection.
-- Add explicit refresh handling to replace the captured comparison data only when requested; integrate dependency graphs in Phases 2–3 and verify the complete review snapshot in Phase 4.
-- Preserve the current captured data when refresh fails and expose the error for retry. Verify that a missing comparison ref does not discard or partially replace the existing data.
-- Freeze diffs, full file contents, and analysis settings from the before and after states. Verify that requesting previously unread file contents after a worktree edit still returns the captured contents.
-- If comparison inputs change during capture, discard that attempt and retry up to a bounded limit. On exhaustion, report why capture could not complete and preserve any existing snapshot. Verify a successful retry after an interrupted capture and preservation on exhaustion; choose the retry limit and change-validation strategy before implementation.
-- Poll Git state and expose stale-state notifications without automatically replacing the captured data; connect these notifications to the refresh UI in Phase 4.
-- Notify only when state relevant to the selected comparison changes. For `staged`, detect index or HEAD changes and ignore unstaged-only edits.
-- For `.`, detect changes to HEAD and relevant worktree contents, including eligible untracked files and analysis settings. Verify that staging alone does not notify when comparison contents and the reviewed file set remain unchanged, but changes to the reviewed file set do notify.
-- For `working`, detect changes to the index and relevant worktree contents, including staging operations, eligible untracked files, and analysis settings. Verify that HEAD-only changes do not notify when the index and worktree comparison inputs remain unchanged.
-- For branch or HEAD inputs, detect changes to the referenced commit and notify without altering the current snapshot; re-resolve these refs on explicit refresh. Treat default input and `@` as HEAD inputs, and keep sides specified by commit ID fixed. Verify that either branch moving in a two-branch comparison triggers a notification and refresh uses the updated tips.
+フェーズ0のCLIは `--help` と `--version` を実行できるところまでとする。サーバーの起動・終了方針は文書化し、サーバーとReact画面の実装はフェーズ1で行う。ユーザー承認済み。
 
-Acceptance: each supported mode produces stable comparison data, including non-TypeScript diffs and full contents. Relevant Git changes produce a stale notification without altering captured data; explicit refresh replaces it. These checks do not require the graph or code-pane UI.
+全体計画を `docs/roadmap.md`、フェーズ0専用計画を `docs/plan.md` とする配置を維持する。ユーザー承認済み。
 
-## Phase 2: TypeScript dependency graph
+配布単位は単一のnpmパッケージ `changemap` とし、CLI・サーバー・UIは同じパッケージ内のディレクトリで分ける。複数パッケージのワークスペース化は必要が生じた段階で検討する。フェーズ0ではCLIの基盤を作り、サーバー・UIの実装は追加しない。ユーザー承認済み。
 
-- Define the internal graph model for file nodes and directed file dependencies.
-- Analyze `.ts`, `.tsx`, `.mts`, `.cts`, and declaration files (`.d.ts`, `.d.mts`, `.d.cts`). Keep JavaScript files outside dependency analysis while allowing changed JavaScript files to be reviewed as unanalyzed diffs; cover these boundaries with fixtures.
-- Detect import and re-export dependencies, including type-only references; deduplicate parallel references between the same files.
-- Include module references whose target files the selected analysis foundation can identify without executing code, including dynamic imports and CommonJS require where supported. Do not impose a string-literal-only restriction or add custom inference logic. Report references whose targets cannot be identified, and document concrete coverage from prototypes and tests rather than assuming that parsing a construct resolves its target.
-- Resolve paths using the repository's TypeScript configuration and handle unresolved, dynamic, and CommonJS references explicitly.
-- Limit dependency graph nodes to eligible files within the reviewed repository. Exclude external packages and Node.js built-in modules even when resolved; include eligible files in other packages within the same repository. Verify both external exclusion and internal cross-package inclusion. Preserve the separate review nodes for unanalyzed changed files.
-- Use analysis settings captured from the respective before and after states, keeping dependency analysis consistent with the snapshot's file contents.
-- Analyze the index for the after side of `staged` and the before side of `working`; include eligible untracked TypeScript files for `.` and `working`. Verify that later worktree edits do not alter analysis of captured states.
-- Build the initial subgraph from every changed TypeScript file plus the union of its direct dependencies and direct users from the before and after graphs.
-- Preserve all edges between selected nodes from both before and after graphs, without recursively expanding the project. Verify that changing A's dependency from B to C retains A, B, and C and the respective before/after edges; classify those edges in Phase 3.
-- Keep deleted and renamed paths available for the merged before/after view.
-- Prototype alternative analysis strategies and measure cold and warm performance on small and large repositories before choosing eager indexing versus narrower analysis.
-- Keep ts-morph as a candidate until prototypes verify correct before/after snapshot analysis and measure analysis time and memory usage on small and large repositories; decide adoption from those results. Define performance targets before evaluating acceptability.
+ローカルサーバーはCLIのフォアグラウンドプロセスで動かし、Ctrl+Cで終了する。ブラウザのタブを閉じてもサーバーは継続する。バックグラウンド常駐やタブ閉鎖に連動した自動終了は初版では提供しない。フェーズ0では方針の文書化のみを行い、実装・終了処理の検証はフェーズ1で行う。ユーザー承認済み。
 
-Acceptance: representative TypeScript fixtures produce the expected direct-neighbor graph, including type imports, re-exports, additions, deletions, and renames.
+初版の正式サポートと開発の基準はNode.js 24系とする。22系は対象外。ユーザー承認済み。対応する最低マイナーバージョンは開発ツールの要件を確認して決める。26系はLTS移行後に検証して追加を判断する。
 
-## Phase 3: graph diff semantics
+調査（2026-09-17）：[Node.js公式リリース一覧](https://nodejs.org/en/about/previous-releases)では22・24がLTS、26がCurrent、20がEOL。Context7の検索では関連する公式資料を得られなかったため、公式サイトで直接確認した。
 
-- Merge before and after graphs into one graph.
-- Mark node status as added, modified, deleted, or renamed.
-- Mark dependency edges as added, deleted, or unchanged.
-- Verify that root commits mark all dependencies as added, and changing A's dependency from B to C marks A-to-B deleted and A-to-C added.
-- Match old and new paths of Git-detected renames to the same file identity at both edge endpoints before comparing dependencies. Verify that renaming B to B-prime and updating A's import preserves one unchanged dependency edge, while retaining B's rename status and A's code diff.
-- Distinguish unanalyzed non-TypeScript changed nodes from analyzed nodes without dependencies in the graph model.
-- Use file nodes throughout the first release; do not abstract directories.
+初版はmacOS・Linux・Windowsをサポート対象とし、フェーズ0から各OSでNode.js 24系の導入・品質チェック・ビルド・CLI起動をCIで検証する。ユーザー承認済み。ローカルで実行した検証とCIで実行した検証は区別して記録する。
 
-Acceptance: merged graph fixtures classify node and edge statuses correctly, including renames, and preserve the distinction between unanalyzed files and files with no dependencies. Visual verification follows in Phase 4.
+フェーズ0でも配布用tarballを作り、リポジトリ外の一時ディレクトリへインストールして `changemap --help` と `changemap --version` の正常終了を検証する。開発用依存やソースが手元にあることで配布不備が隠れるのを防ぐ。npm公開は行わない。フェーズ5では完成した製品全体について配布検証を行う。ユーザー承認済み。
 
-## Phase 4: review UI and themes
+## 合意済みの開発ツール
 
-- Build the React Flow graph view (confirmed graph UI technology) with stable node identity and selection; select the automatic layout engine separately.
-- Add the right-hand code pane: diff by default, full-file toggle, full old content for deleted files, and rename metadata.
-- For an empty comparison, show the comparison targets and a no-changes message. In uncommitted modes, continue update detection and show the refresh button when changes arise; verify the transition from an empty review to a populated review after explicit refresh.
-- Show changed binary files as change nodes; display their paths, statuses, and an explicit text-diff-unavailable message in the right pane. Do not provide image or other format-specific previews in the first release; verify binary rendering states.
-- Add graph legend, status labels, orientation control, and basic zoom/pan controls.
-- Mark source nodes with unresolved references and show the relevant locations and available reasons in the right pane when selected. Do not create placeholder target nodes or edges. Distinguish unresolved references from intentionally excluded references, such as external packages, and verify these rendering states.
-- Allow review to continue with resolved dependencies and code diffs when unresolved references remain. Show a review-wide notice of incomplete dependency analysis, including when detected unresolved references originate outside the displayed nodes; explain that direct users may be missing and verify this case.
-- Use LR as the default layout and expose orientation as a setting. Show statuses with both Catppuccin colors and non-color labels/icons, and place unanalyzed changed files in a separate area without dependency edges.
-- Show a refresh button on stale-state notifications while preserving the current graph and code. Verify that selecting a previously unselected node still displays captured contents, and that explicit refresh switches diffs, full contents, dependency graphs, and analysis settings together as one review snapshot.
-- On refresh failure, retain the current graph and code and show an error with a retry button. Switch the displayed snapshot only after the entire replacement has been generated successfully; verify both failure preservation and successful retry.
-- Bundle Catppuccin Latte, Frappé, Macchiato, and Mocha; use Mocha as the initial theme.
-- Apply one selected theme consistently to UI, graph, and code; do not support separate graph/code themes.
-- Persist UI settings globally in an XDG-compatible `config.toml`, shared across projects. Save theme and orientation changes immediately.
-- If the config file does not exist, start with defaults and create it only when the user first changes a UI setting. Verify that starting the application alone does not create the file and that the first setting change is persisted.
-- If saving settings fails, keep the changes applied in the current UI and allow review to continue. Show that saving failed and those changes will not persist across restarts. Preserve the existing config file on failure; verify the session behavior and file preservation with a failed-save case.
-- If malformed configuration cannot be loaded, warn and start with defaults while preserving the original file. In this mode, apply UI setting changes only for the current session and indicate that they are not saved. Verify that review remains usable and the malformed file is not overwritten; this is an exception to immediate persistence.
+次の構成を採用する。ユーザー承認済み。
 
-Acceptance: selecting any node opens the correct content, switching theme updates the whole screen, settings survive restart, and the graph remains readable in all four flavors. Statuses and unanalyzed files are visually unambiguous. Relevant Git changes show a refresh affordance without replacing the graph or code; explicit refresh switches the complete review snapshot consistently.
+| 用途       | 採用ツール                   |
+| ---------- | ---------------------------- |
+| CLIビルド  | tsdownでNode.js向けESMを出力 |
+| 型チェック | TypeScriptの `tsc --noEmit`  |
+| テスト     | Vitest                       |
+| lint       | Oxlint                       |
+| format     | Oxfmt                        |
 
-## Phase 5: quality and release
+Node.jsで実行するnpmパッケージとして配布し、Node.js自体を含む単体実行ファイルは作らない。具体的なバージョンとNode.jsの最低マイナーバージョンは、導入時に各パッケージの要件を照合し、ロックファイルとCIで再現性を確保する。
 
-- Add fixtures and integration tests for every CLI mode, Git status, dependency extraction, graph diff, refresh detection, settings persistence, and rendering states.
-- Test large-graph behavior and record measured limits; keep analysis and rendering responsive enough for the first supported project sizes.
-- Verify packaging with `pnpm pack` and an isolated install of the `changemap` binary.
-- Publish the first npm package only after the README, license, build, and smoke test are complete.
+調査（2026-09-17）：tsdownはNode.js向けESMのCLI構成とshebangの扱いを確認した。Vitest、Oxlint、Oxfmtは公式の導入資料を確認した。組み合わせの実行検証は未実施。
 
-Acceptance: CI passes on the supported Node versions, the packed artifact runs from a clean temporary directory, and the first release scope is documented in English.
+- [tsdown CLI構成](https://github.com/rolldown/tsdown/blob/main/skills/tsdown/references/option-shims.md)
+- [Vitest](https://vitest.dev/guide/)
+- [Oxlint](https://oxc.rs/docs/guide/usage/linter)
+- [Oxfmt](https://oxc.rs/docs/guide/usage/formatter)
 
-## Deferred backlog
+## 実装手順
 
-- Image and other format-specific binary previews.
-- GitHub PR (`--pr`) and GitLab MR (`--mr`) inputs, including authentication and comment synchronization.
-- Line comments and AI prompt copying.
-- On-demand graph expansion beyond the initial direct neighborhood.
-- User-configurable directory abstraction and other graph filtering policies.
-- File watching instead of polling.
-- Project-specific configuration overrides and custom themes.
-- Go analyzer behind a language-agnostic analyzer interface.
+以下は合意した範囲を実装作業へ落とし込んだもの。計画全体の確認は完了しており、この手順に沿って着手する。
 
-## Open design decisions before implementation
+1. Backlog.mdの現行の初期化手順を公式資料で確認し、このリポジトリに初期化する。「フェーズ0：プロジェクト基盤」のマイルストーンと、以下の作業に対応するタスク・受け入れ条件を登録する。後続フェーズの詳細タスクは作らない。
+2. 単一パッケージの `package.json`、pnpmロックファイル、TypeScript設定を作る。pnpmの利用バージョンを固定し、Node.js 24系内の最低対応バージョンを依存ツールの要件から決める。既存のLICENSEを保持し、メタデータと整合させる。npm名の利用可否を読み取りで確認し、使えない場合は名称変更を独断で行わず報告する。
+3. `src/cli/` にCLI入口を作り、tsdownで `dist/` にESMを出力する。`package.json` の `bin` から `changemap` として実行可能にする。`--help` は実装済みの利用方法を表示し、`--version` はパッケージのバージョンと一致させる。レビュー機能は実装せず、未対応の呼び出しはその旨を示して非ゼロで終了する。
+4. Vitest・TypeScript・Oxlint・Oxfmtの設定と下記コマンドを用意する。テストはCLIを子プロセスとして実行し、ヘルプ・バージョンの出力と終了コード、未対応呼び出しを確認する。
+5. 配布対象ファイルを明示し、tarballを一時ディレクトリへインストールする検証を作る。開発用依存がない環境で、インストールされたコマンド経由のヘルプ・バージョンを確認する。Windowsを含めて動くよう、検証処理を特定のシェルに依存させない。
+6. GitHub ActionsにmacOS・Linux・Windows × Node.js 24系の検証を設定する。ロックファイル固定の導入、品質チェック、ビルド、配布検証を実行する。最低対応バージョンと24系の最新パッチを検証対象に含める。
+7. 英語READMEに必要環境、開発・ローカルインストール方法、実装済みのCLI例を記載する。将来のレビュー機能とサーバーの起動・終了方針は未実装として区別する。npm公開済みと誤認させる案内はしない。
+8. クリーンな環境で受け入れ条件を検証し、Backlog.mdと引き継ぎ文書に実行結果・未検証事項を記録する。CIの設定作成だけを実行成功とは扱わない。
 
-- Exact CLI option compatibility and error messages.
-- TOML schema, XDG environment-variable behavior, and CLI override precedence.
-- Verify and document the selected analysis foundation's concrete module-reference coverage.
-- Graph layout engine and edge style for added/deleted dependencies.
-- Browser/server transport for refresh notifications.
-- Node.js support range and npm release workflow.
+## 開発コマンド
+
+| コマンド            | 役割                                         |
+| ------------------- | -------------------------------------------- |
+| `pnpm test`         | Vitestを一回実行                             |
+| `pnpm typecheck`    | 型チェック。成果物は出力しない               |
+| `pnpm lint`         | Oxlintによるチェック                         |
+| `pnpm format`       | Oxfmtによる整形                              |
+| `pnpm format:check` | ファイルを書き換えず整形状態を検証           |
+| `pnpm build`        | CLIの配布成果物を生成                        |
+| `pnpm test:pack`    | tarballの生成・隔離インストール・CLI起動確認 |
+
+## 受け入れ条件
+
+クリーンなチェックアウトで `pnpm install --frozen-lockfile` が成功し、test・typecheck・lint・format:check・buildがすべて成功する。ビルド成果物の `changemap --help` と `changemap --version` が正常終了し、バージョン表示はパッケージメタデータと一致する。
+
+macOS・Linux・WindowsのCIで、Node.js 24系の導入・品質チェック・ビルド・CLI起動を検証する。
+
+配布用tarballをリポジトリ外へインストールし、開発用ソースに依存せず `changemap --help` と `changemap --version` が正常終了することを各OSで検証する。
+
+Backlog.mdにフェーズ0のマイルストーンと実績が記録され、英語READMEの実装済みコマンド例が実態と一致している。
+
+## 対象外と後続への引き継ぎ
+
+サーバー・React画面の実装、Git差分取得、依存解析、グラフ表示、設定保存、npm公開は今回の対象外。ポート選択、ブラウザ起動、サーバーの通信方式、詳細なGit引数処理はフェーズ1着手時に具体化する。
+
+UIビルドツールや依存解析基盤は今回のツール選定に含めない。新しい製品用語や変更コストの高い設計判断は今回追加していないため、用語集・ADRは新規作成しない。
+
+## 実装・検証記録（2026-09-17）
+
+- 単一パッケージ、Node.js `>=24.11.0 <25`、pnpm 10.33.0、ESM成果物 `dist/cli.mjs`、bin `changemap` を設定。
+- 採用版：tsdown 0.23.0、TypeScript 7.0.2、Vitest 5.0.0、Oxlint 1.82.0、Oxfmt 0.67.0、Backlog.md 1.51.0。ロックファイルを作成。既存の公開後7日間の待機設定を維持した。
+- npmメタデータで直接・間接依存のNode.js要件を照合。24系の最低版を決める要件はtsdownの `^24.11.0`。
+- npm名 `changemap` は読み取り照会で404。既存公開パッケージは確認されなかったが、名前の予約や実際の公開可否は未確認。npm公開はしていない。
+- Backlog.mdは公式CLIで初期化。`--no-git --integration-mode none` により自動コミットとエージェント設定の生成を無効化。マイルストーンm-0とTASK-1〜3に実績を記録。
+- macOS / Node.js 24.14.1で、クリーンな一時コピー（`.git`・`node_modules`・`dist`なし）への `pnpm install --frozen-lockfile` と、typecheck・lint・format:check・test（12件）・build・test:packがすべて成功。コミット前のため「クリーンなチェックアウト」そのものの検証はCIに残る。
+- tarballの収録内容は `dist/cli.mjs`・`package.json`・`README.md`・`LICENSE`。隔離先でprod/offline/ignore-scriptsにより導入し、開発依存が存在しないことと、インストール済みbin経由のhelp/versionを確認。
+- 初回の型チェックでJSONの名前付きimportが失敗したためdefault importに修正。配布検証ではmiseのpnpm実行バイナリと通常のJS版を両方扱うよう修正し、pnpmが生成する補助ディレクトリと開発依存の混入を区別して検証した。
+- GitHub ActionsはmacOS・Linux・Windows × `24.11.0`・`24.x` の6ジョブを設定。まだ実行しておらず、TASK-3はIn Progress。最低版・他OS・24系最新の成功をローカル結果から推定しない。
+
+導入資料はfind-docsスキルでContext7経由の公式資料を確認した。
+
+- [Backlog.md](https://github.com/mrlesk/Backlog.md)：非対話init、milestone、task操作。採用版のCLI helpでもオプションを確認。
+- [tsdown](https://github.com/rolldown/tsdown)：entry・ESM・shebangと実行権限・outExtensions。
+- [Vitest](https://vitest.dev/config/)：Node環境とテスト対象設定。
+- [Oxlint](https://oxc.rs/docs/guide/usage/linter/config-file-reference.html)、[Oxfmt](https://oxc.rs/docs/guide/usage/formatter/ignore-files.html)：設定ファイルと除外指定。
