@@ -1,6 +1,6 @@
 # フェーズ0：プロジェクト基盤
 
-状態：フェーズ0の実装とmacOSでのローカル検証は完了。3 OS × Node.js 2バージョンのCI実行確認待ち。全受け入れ条件の完了とはまだ扱わない。
+状態：フェーズ0完了。ローカル検証に加え、3 OS × Node.js 2バージョンのCIで全6ジョブが成功。
 
 全体計画は [roadmap.md](roadmap.md)、製品仕様は [design.md](design.md)、引き継ぎは [handoff.md](handoff.md) を参照する。このファイルはフェーズ0だけを扱う。
 
@@ -101,10 +101,10 @@ UIビルドツールや依存解析基盤は今回のツール選定に含めな
 - npmメタデータで直接・間接依存のNode.js要件を照合。24系の最低版を決める要件はtsdownの `^24.11.0`。
 - npm名 `changemap` は読み取り照会で404。既存公開パッケージは確認されなかったが、名前の予約や実際の公開可否は未確認。npm公開はしていない。
 - Backlog.mdは公式CLIで初期化。`--no-git --integration-mode none` により自動コミットとエージェント設定の生成を無効化。マイルストーンm-0とTASK-1〜3に実績を記録。
-- macOS / Node.js 24.14.1で、クリーンな一時コピー（`.git`・`node_modules`・`dist`なし）への `pnpm install --frozen-lockfile` と、typecheck・lint・format:check・test（12件）・build・test:packがすべて成功。コミット前のため「クリーンなチェックアウト」そのものの検証はCIに残る。
+- macOS / Node.js 24.14.1で、クリーンな一時コピー（`.git`・`node_modules`・`dist`なし）への `pnpm install --frozen-lockfile` と、typecheck・lint・format:check・test（12件）・build・test:packがすべて成功。その後、CIのクリーンなチェックアウトでも全6ジョブが成功。
 - tarballの収録内容は `dist/cli.mjs`・`package.json`・`README.md`・`LICENSE`。隔離先でprod/offline/ignore-scriptsにより導入し、開発依存が存在しないことと、インストール済みbin経由のhelp/versionを確認。
 - 初回の型チェックでJSONの名前付きimportが失敗したためdefault importに修正。配布検証ではmiseのpnpm実行バイナリと通常のJS版を両方扱うよう修正し、pnpmが生成する補助ディレクトリと開発依存の混入を区別して検証した。
-- GitHub ActionsはmacOS・Linux・Windows × `24.11.0`・`24.x` の6ジョブを設定。まだ実行しておらず、TASK-3はIn Progress。最低版・他OS・24系最新の成功をローカル結果から推定しない。
+- GitHub ActionsはmacOS・Linux・Windows × `24.11.0`・`24.x` の6ジョブすべて成功。[CI実行結果](https://github.com/tapioca24/changemap/actions/runs/35217178260)（実装コミット `be5c0a7`）。TASK-1〜3はすべてDone。初回CIではWindowsの改行変換で整形チェックが失敗したため、`.gitattributes` でLFに統一して修正した。各ジョブで導入・品質チェック・12テスト・ビルド・隔離配布検証を実行した。
 
 導入資料はfind-docsスキルでContext7経由の公式資料を確認した。
 

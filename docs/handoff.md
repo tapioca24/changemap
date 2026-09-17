@@ -4,7 +4,7 @@
 
 CLI・開発ツール・配布検証・英語README・6ジョブのCI設定を実装した。macOS / Node.js 24.14.1のクリーンな一時コピーで固定ロック導入と全チェックが成功。詳細と調査出典は [plan.md](plan.md) の実装・検証記録、作業状況は `backlog/` を参照する。
 
-残る受け入れ条件はGitHub Actionsの実行成功確認。未コミット・未pushのため未実行であり、TASK-3はIn Progressのまま。フェーズ0全体を検証完了と扱わない。サーバーやUIは実装していない。npm公開もしていない。
+フェーズ0は完了。ユーザーのコミット・push許可を受け、作業ブランチ `feat/phase-0-foundation` をpushした。初回CIのWindows改行問題を `.gitattributes` で修正し、[CIの全6ジョブ](https://github.com/tapioca24/changemap/actions/runs/35217178260)で成功を確認。BacklogのTASK-1〜3はDone。次はフェーズ1の着手時設計から進める。サーバー・UIは未実装。npm公開・mainへのマージはしていない。
 
 以下は実装前の引き継ぎ記録として保持する。
 
