@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,6 +28,92 @@ function runPnpm(args, cwd) {
   return result;
 }
 
+async function testServer(installed) {
+  const init = spawnSync("git", ["init", "--quiet", "--template="], {
+    cwd: temporary,
+    encoding: "utf8",
+  });
+  assert.ifError(init.error);
+  assert.equal(init.status, 0, init.stderr);
+  writeFileSync(join(temporary, ".gitignore"), "node_modules/\n*.tgz\n");
+  writeFileSync(join(temporary, "example.ts"), "export const value = 1;\n");
+  // The installed bin shim is covered above. Use its declared target to manage the
+  // server child directly on all three OSes, without an intermediate pnpm process.
+  const child = spawn(
+    process.execPath,
+    [join(installed, metadata.bin.changemap), ".", "--no-open"],
+    {
+      cwd: temporary,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  const exited = new Promise((resolve) => child.once("exit", (code) => resolve(code)));
+  let stdout = "";
+  let stderr = "";
+  child.stderr.on("data", (data) => {
+    stderr += data.toString();
+  });
+  try {
+    const url = await new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`Server startup timed out: ${stderr}`)),
+        15_000,
+      );
+      child.stdout.on("data", (data) => {
+        stdout += data.toString();
+        const match = stdout.match(/http:\/\/127\.0\.0\.1:\d+/);
+        if (match) {
+          clearTimeout(timer);
+          resolve(match[0]);
+        }
+      });
+      child.once("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.once("exit", () => {
+        clearTimeout(timer);
+        reject(new Error(`Server exited: ${stderr}`));
+      });
+    });
+    const html = await fetch(url).then((response) => response.text());
+    const assets = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((match) => match[1]);
+    assert.equal(assets.length, 2);
+    for (const asset of assets) {
+      const response = await fetch(`${url}${asset}`);
+      assert.equal(response.status, 200);
+      assert.ok((await response.text()).length > 100);
+    }
+    const snapshot = await fetch(`${url}/api/snapshot`).then((response) => response.json());
+    assert.ok(snapshot.changes.some((change) => change.newPath === "example.ts"));
+    writeFileSync(join(temporary, "example.ts"), "export const value = 2;\n");
+    const old = await fetch(
+      `${url}/api/file?side=after&path=example.ts&snapshot=${snapshot.id}`,
+    ).then((response) => response.json());
+    assert.equal(old.content, "export const value = 1;\n");
+    const refreshedResponse = await fetch(`${url}/api/refresh`, {
+      method: "POST",
+      headers: { "X-Changemap-Request": "1" },
+    });
+    assert.equal(refreshedResponse.status, 200);
+    const refreshed = await refreshedResponse.json();
+    assert.notEqual(refreshed.id, snapshot.id);
+    const updated = await fetch(
+      `${url}/api/file?side=after&path=example.ts&snapshot=${refreshed.id}`,
+    ).then((response) => response.json());
+    assert.equal(updated.content, "export const value = 2;\n");
+    assert.equal(stderr, "");
+  } finally {
+    child.kill("SIGTERM");
+    const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
+    try {
+      await exited;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
 try {
   runPnpm(["pack", "--pack-destination", temporary], root);
   const archives = readdirSync(temporary).filter((name) => name.endsWith(".tgz"));
@@ -48,7 +134,8 @@ try {
     assert.equal(existsSync(join(temporary, "node_modules", dependency)), false);
     assert.equal(existsSync(join(installed, "node_modules", dependency)), false);
   }
-  assert.deepEqual(readdirSync(join(installed, "dist")), ["cli.mjs"]);
+  assert.deepEqual(readdirSync(join(installed, "dist")).sort(), ["cli.mjs", "ui"]);
+  assert.ok(existsSync(join(installed, "dist", "ui", ".vite", "license.md")));
   // pnpm exec resolves the installed bin shim, including changemap.cmd on Windows.
   const help = runPnpm(["exec", "changemap", "--help"], temporary);
   assert.match(help.stdout, /Usage:/);
@@ -56,8 +143,9 @@ try {
   const version = runPnpm(["exec", "changemap", "--version"], temporary);
   assert.equal(version.stdout.trim(), metadata.version);
   assert.equal(version.stderr, "");
+  await testServer(installed);
   console.log(
-    `Packed CLI passed in an isolated directory (${process.platform}, ${process.version}).`,
+    `Packed CLI, React assets, full contents and refresh passed in an isolated directory (${process.platform}, ${process.version}).`,
   );
 } finally {
   rmSync(temporary, { recursive: true, force: true });
