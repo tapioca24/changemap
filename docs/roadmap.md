@@ -46,6 +46,8 @@ Acceptance: each supported mode produces stable comparison data, including non-T
 
 ## Phase 2: TypeScript dependency graph
 
+Implemented and locally verified; see [Phase 2 notes](phase-2.md) for coverage, strategy selection, performance measurements, and remaining boundaries. CI for this phase has not been run.
+
 - Define the internal graph model for file nodes and directed file dependencies.
 - Analyze `.ts`, `.tsx`, `.mts`, `.cts`, and declaration files (`.d.ts`, `.d.mts`, `.d.cts`). Keep JavaScript files outside dependency analysis while allowing changed JavaScript files to be reviewed as unanalyzed diffs; cover these boundaries with fixtures.
 - Detect import and re-export dependencies, including type-only references; deduplicate parallel references between the same files.
