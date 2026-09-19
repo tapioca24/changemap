@@ -25,7 +25,11 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "prepack": "pnpm build",
-    "test:pack": "node scripts/pack-smoke.mjs"
+    "test:pack": "node scripts/pack-smoke.mjs",
+    "benchmark:analysis": "node scripts/benchmark-analysis.mjs"
+  },
+  "dependencies": {
+    "typescript-api": "npm:typescript@6.0.2"
   },
   "devDependencies": {
     "@types/node": "^24.13.4",
@@ -36,6 +40,7 @@
     "oxlint": "1.82.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "ts-morph": "28.0.0",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vite": "^8.3.0",

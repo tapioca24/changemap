@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { analyzeTypeScript } from "../analysis/typescript.js";
+import { selectNeighborhood } from "../graph/select.js";
 import type {
   CapturedState,
   FileChange,
@@ -150,6 +152,11 @@ export class SnapshotSource {
             before: describe(inputs.before),
             after: describe(inputs.after),
             changes,
+            graph: selectNeighborhood(
+              analyzeTypeScript(inputs.before),
+              analyzeTypeScript(inputs.after),
+              changes,
+            ),
           }),
         });
       } catch (error) {

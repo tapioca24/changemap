@@ -1,5 +1,19 @@
 # セッション引き継ぎ（2026-09-17）
 
+## フェーズ2実装後の追記（2026-09-19）
+
+フェーズ2を実装し、macOS / Node.js 24.14.1で全63テスト、型チェック、lint、整形チェック、ビルド、隔離配布検証が成功した。解析方式の比較、対応範囲、測定の再現方法は [phase-2.md](phase-2.md)。CIとLinux/Windowsでの今回の検証は未実施。ユーザーの依頼により、この検証済みの変更を `feat/phase-2-typescript-analysis` にコミット・pushし、未マージの `feat/phase-1-local-review` を比較元とするPRを作成する。最新のCI状況はPRを参照。
+
+性能目標はユーザー承認済み。変更前後の解析と近傍抽出について、100ファイルは初回1秒 / 再解析0.5秒、10,000ファイルは初回10秒 / 再解析5秒、ピークRSS 1 GiB。完成版の10,000ファイルfixtureでは637 ms / 552 ms、722 MiBだった。1ファイル約143 bytesの合成データなので、実際の大規模プロジェクトの性能保証とは扱わない。
+
+ts-morph ProjectとCompiler API、構文走査方式を比較し、Compiler APIを採用した。実行時依存は `typescript-api`（TypeScript 6.0.2の固定alias）。型チェックのTypeScript 7.0.2は維持し、ts-morph 28.0.0は比較試作の開発依存にのみ残した。全TSファイルをrootに渡し、noResolveで再帰的なファイル追加を止める。これを外すと長い依存鎖でスタック上限に達するため注意する。依存解決と式の型情報はCompiler APIから得る。
+
+`src/analysis/` が両状態の固定ファイル・設定だけを読む。作業ツリーやインストール済みnode_modulesへのfallbackは禁止。標準libや外部extends設定も読み込まない。未解決参照と設定・構文診断を記録し、意図的な外部除外と区別する。詳細な構文・設定の境界はREADMEとフェーズ2文書を参照。
+
+`ReviewSummary.graph` にbefore/afterの全依存グラフ、直接近傍selection、全体のincompleteを追加した。既存snapshot APIとrefresh APIから取得できる。グラフの生成まで終えてからReviewSessionを入れ替える。解析失敗時の既存snapshot保持もテスト済み。変更前後の旧・新パスはそのまま残している。
+
+次はフェーズ3。Gitのrename情報から旧・新パスの同一性を定義して両端を正規化し、ノードの変更状態と辺の追加・削除・不変を判定する。依存先BをB-primeへrenameしてAのimportを書き換えた場合に辺を不変とすること。現状のselectionは両状態の直接依存先・利用元の和集合と選択ノード間の全辺を保持する。グラフUI、コードペイン、設定保存はフェーズ4以降。BacklogのTASK-7〜9はDone。
+
 ## フェーズ1実装後の追記（2026-09-19）
 
 フェーズ1を実装し、macOS / Node.js 24.14.1で統合テスト45件、型チェック、lint、整形チェック、ビルド、隔離配布検証が成功した。詳細は [phase-1.md](phase-1.md)。フェーズ0専用の [plan.md](plan.md) は保持している。

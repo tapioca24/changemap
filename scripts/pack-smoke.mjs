@@ -36,7 +36,13 @@ async function testServer(installed) {
   assert.ifError(init.error);
   assert.equal(init.status, 0, init.stderr);
   writeFileSync(join(temporary, ".gitignore"), "node_modules/\n*.tgz\n");
-  writeFileSync(join(temporary, "example.ts"), "export const value = 1;\n");
+  writeFileSync(join(temporary, "example.ts"), "import 'target';\nexport const value = 1;\n");
+  writeFileSync(join(temporary, "dependency.ts"), "export {};\n");
+  writeFileSync(join(temporary, "alternate.ts"), "export {};\n");
+  writeFileSync(
+    join(temporary, "tsconfig.json"),
+    JSON.stringify({ compilerOptions: { paths: { target: ["./dependency.ts"] } } }),
+  );
   // The installed bin shim is covered above. Use its declared target to manage the
   // server child directly on all three OSes, without an intermediate pnpm process.
   const child = spawn(
@@ -86,11 +92,21 @@ async function testServer(installed) {
     }
     const snapshot = await fetch(`${url}/api/snapshot`).then((response) => response.json());
     assert.ok(snapshot.changes.some((change) => change.newPath === "example.ts"));
-    writeFileSync(join(temporary, "example.ts"), "export const value = 2;\n");
+    assert.deepEqual(snapshot.graph.after.edges, [
+      { source: "example.ts", target: "dependency.ts" },
+    ]);
+    assert.equal(snapshot.graph.incomplete, false);
+    writeFileSync(join(temporary, "example.ts"), "import 'target';\nexport const value = 2;\n");
+    writeFileSync(
+      join(temporary, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { paths: { target: ["./alternate.ts"] } } }),
+    );
+    const frozen = await fetch(`${url}/api/snapshot`).then((response) => response.json());
+    assert.deepEqual(frozen.graph, snapshot.graph);
     const old = await fetch(
       `${url}/api/file?side=after&path=example.ts&snapshot=${snapshot.id}`,
     ).then((response) => response.json());
-    assert.equal(old.content, "export const value = 1;\n");
+    assert.equal(old.content, "import 'target';\nexport const value = 1;\n");
     const refreshedResponse = await fetch(`${url}/api/refresh`, {
       method: "POST",
       headers: { "X-Changemap-Request": "1" },
@@ -98,10 +114,13 @@ async function testServer(installed) {
     assert.equal(refreshedResponse.status, 200);
     const refreshed = await refreshedResponse.json();
     assert.notEqual(refreshed.id, snapshot.id);
+    assert.deepEqual(refreshed.graph.after.edges, [
+      { source: "example.ts", target: "alternate.ts" },
+    ]);
     const updated = await fetch(
       `${url}/api/file?side=after&path=example.ts&snapshot=${refreshed.id}`,
     ).then((response) => response.json());
-    assert.equal(updated.content, "export const value = 2;\n");
+    assert.equal(updated.content, "import 'target';\nexport const value = 2;\n");
     assert.equal(stderr, "");
   } finally {
     child.kill("SIGTERM");
@@ -145,7 +164,7 @@ try {
   assert.equal(version.stderr, "");
   await testServer(installed);
   console.log(
-    `Packed CLI, React assets, full contents and refresh passed in an isolated directory (${process.platform}, ${process.version}).`,
+    `Packed CLI, React assets, dependency analysis, full contents and refresh passed in an isolated directory (${process.platform}, ${process.version}).`,
   );
 } finally {
   rmSync(temporary, { recursive: true, force: true });
