@@ -66,6 +66,8 @@ Acceptance: representative TypeScript fixtures produce the expected direct-neigh
 
 ## Phase 3: graph diff semantics
 
+Implemented; see [Phase 3 notes](phase-3.md) for the merged model and validation.
+
 - Merge before and after graphs into one graph.
 - Mark node status as added, modified, deleted, or renamed.
 - Mark dependency edges as added, deleted, or unchanged.

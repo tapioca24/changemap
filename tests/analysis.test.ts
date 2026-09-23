@@ -372,6 +372,7 @@ describe("snapshot integration", () => {
     const first = await repo.commit();
     const root = await new SnapshotSource(repo.root, { mode: "commit", target: first }).capture();
     expect(root.summary.graph.before.nodes).toEqual([]);
+    expect(root.summary.graph.merged.edges[0].status).toBe("added");
     expect(edgeNames(root.summary.graph.after)).toEqual(["a.ts->b.ts"]);
     await repo.git(["mv", "b.ts", "c.ts"]);
     await repo.write("a.ts", "import './c';");
@@ -383,6 +384,13 @@ describe("snapshot integration", () => {
     });
     const session = await ReviewSession.create(source);
     expect(session.snapshot.summary.graph.selection.paths).toEqual(["a.ts", "b.ts", "c.ts"]);
+    expect(session.snapshot.summary.graph.merged.edges).toEqual([
+      { source: "before:a.ts", target: "before:b.ts", status: "unchanged" },
+    ]);
+    expect(session.snapshot.summary.graph.merged.nodes.map((node) => node.status)).toEqual([
+      "modified",
+      "renamed",
+    ]);
     const previous = session.snapshot;
     await repo.git(["branch", "-m", "moved"]);
     await expect(session.refresh()).rejects.toThrow();

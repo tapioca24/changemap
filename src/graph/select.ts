@@ -1,3 +1,4 @@
+import { mergeGraphs } from "./merge.js";
 import type { FileChange } from "../shared/review.js";
 import type { DependencyGraph, ReviewGraph } from "./model.js";
 
@@ -28,6 +29,7 @@ export function selectNeighborhood(
   return Object.freeze({
     before,
     after,
+    merged: mergeGraphs(before, after, changes),
     selection: Object.freeze({
       paths: Object.freeze([...selected].sort()),
       beforeEdges: edges(before),

@@ -1,5 +1,13 @@
 # セッション引き継ぎ（2026-09-17）
 
+## フェーズ3実装後の追記（2026-09-23）
+
+フェーズ3を実装した。`ReviewSummary.graph.merged` に統合した直接近傍と解析対象外の変更ノードを追加。Gitのrename対応を参照元・参照先の両端に適用し、ノードの変更状態と辺の追加・削除・不変を判定する。旧パスの再利用とrename先を別IDで保持する。旧・新パス、元のFileChange、状態別の解析対象区分を保持し、片側だけ解析対象のrenameも一つのノードとする。
+
+macOS / Node.js 24.14.1で全71テスト、型チェック、lint、整形、build、隔離配布検証が成功。CIと他OSは未実行。実装・失敗と再検証の記録は [phase-3.md](phase-3.md)。BacklogのTASK-10はDone。ユーザーの依頼により `feat/phase-3-graph-diff` にコミット・pushし、未マージの `feat/phase-2-typescript-analysis` を比較元にPRを作成する。最新のCI結果はPRを参照。
+
+次はフェーズ4。既存のbefore/after/selectionは互換用に残している。UIの描画にはmergedのnodes/edgesを使う。辺のsource/targetはノードIDを参照し、全文取得には旧・新パスを使う。IDは比較内に限定され、更新をまたいだ同一性は保証しない。未解決参照・診断は既存のbefore/afterと全体のincompleteを引き続き参照する。
+
 ## フェーズ2のCI修正（2026-09-23）
 
 初回CIは全6ジョブで63テストが成功したが、配布検証のオフライン導入がTypeScriptのレジストリメタデータ不足で失敗した。配布検証を空のstore/cacheからのオンライン導入に修正し、ローカルで成功を確認した。以前の「通常環境で既存キャッシュから導入できた」という結果だけではクリーンな環境の検証として不十分だった。最新の再実行結果は [PR #3](https://github.com/tapioca24/changemap/pull/3) を参照。

@@ -43,6 +43,7 @@ test("polling notifies without replacing an empty review; explicit refresh repla
   const { request, session } = await serve(repo.root);
   const original = await request("/api/snapshot").then((response) => response.json());
   expect(original.changes).toEqual([]);
+  expect(original.graph.merged).toEqual({ nodes: [], edges: [] });
   await repo.write("added.css", "body {}\n");
   await vi.waitFor(() => expect(session.status.stale).toBe(true));
   expect((await request("/api/status").then((response) => response.json())).stale).toBe(true);
@@ -53,6 +54,9 @@ test("polling notifies without replacing an empty review; explicit refresh repla
   }).then((response) => response.json());
   expect(updated.id).not.toBe(original.id);
   expect(updated.changes[0]).toMatchObject({ newPath: "added.css", status: "added" });
+  expect(updated.graph.merged.nodes).toMatchObject([
+    { newPath: "added.css", status: "added", analyzed: { before: false, after: false } },
+  ]);
   expect(session.status.stale).toBe(false);
 });
 
