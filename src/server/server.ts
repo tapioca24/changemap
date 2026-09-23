@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ReviewSession } from "../review/session.js";
+import { SettingsStore } from "../config/settings.js";
+import { validSettings } from "../shared/settings.js";
 
 export interface LocalServer {
   url: string;
@@ -11,11 +13,12 @@ export interface LocalServer {
 
 export async function startServer(
   session: ReviewSession,
-  options: { port?: number; assets?: string; pollIntervalMs?: number } = {},
+  options: { port?: number; assets?: string; pollIntervalMs?: number; configPath?: string } = {},
 ): Promise<LocalServer> {
   const assets = options.assets ?? fileURLToPath(new URL("./ui/", import.meta.url));
   // Validate the packaged entry before announcing a working URL.
   const html = await readFile(join(assets, "index.html"));
+  const settings = await SettingsStore.load(options.configPath);
   let origin = "";
   const json = (response: ServerResponse, status: number, value: unknown) => {
     response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
@@ -27,7 +30,7 @@ export async function startServer(
     response.setHeader("Referrer-Policy", "no-referrer");
     response.setHeader(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
     );
     try {
       if (
@@ -39,7 +42,34 @@ export async function startServer(
         return;
       }
       const url = new URL(request.url ?? "/", origin);
-      if (request.method === "GET" && url.pathname === "/api/snapshot") {
+      if (request.method === "GET" && url.pathname === "/api/settings") {
+        json(response, 200, settings.state);
+      } else if (request.method === "POST" && url.pathname === "/api/settings") {
+        if (request.headers["x-changemap-request"] !== "1") {
+          json(response, 403, { error: "A same-origin settings request is required." });
+          return;
+        }
+        let body = "";
+        for await (const chunk of request) {
+          body += chunk.toString();
+          if (body.length > 4096) {
+            json(response, 413, { error: "Settings request too large." });
+            return;
+          }
+        }
+        let value: unknown;
+        try {
+          value = JSON.parse(body);
+        } catch {
+          json(response, 400, { error: "Invalid JSON." });
+          return;
+        }
+        if (!validSettings(value)) {
+          json(response, 400, { error: "Invalid settings." });
+          return;
+        }
+        json(response, 200, await settings.save(value));
+      } else if (request.method === "GET" && url.pathname === "/api/snapshot") {
         json(response, 200, session.snapshot.summary);
       } else if (request.method === "GET" && url.pathname === "/api/status") {
         json(response, 200, session.status);

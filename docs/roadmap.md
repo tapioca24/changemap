@@ -80,6 +80,8 @@ Acceptance: merged graph fixtures classify node and edge statuses correctly, inc
 
 ## Phase 4: review UI and themes
 
+Implemented and locally verified; see [Phase 4 notes](phase-4.md). CI and other OSes have not been run for this phase.
+
 - Build the React Flow graph view (confirmed graph UI technology) with stable node identity and selection; select the automatic layout engine separately.
 - Add the right-hand code pane: diff by default, full-file toggle, full old content for deleted files, and rename metadata.
 - For an empty comparison, show the comparison targets and a no-changes message. In uncommitted modes, continue update detection and show the refresh button when changes arise; verify the transition from an empty review to a populated review after explicit refresh.

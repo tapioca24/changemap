@@ -1,5 +1,15 @@
 # セッション引き継ぎ（2026-09-17）
 
+## フェーズ4実装後の追記（2026-09-23）
+
+フェーズ4を実装した。React Flow + Dagreの4方向グラフ、右コードペイン、未解決参照・解析不完全通知、解析対象外の区画、Catppuccin 4テーマ、XDG config.tomlへの設定保存を追加。Dagre採用はユーザー承認済み。詳細は [phase-4.md](phase-4.md)。
+
+macOS / Node.js 24.14.1で全87テスト、型チェック、lint、整形、build、設定APIを含む隔離配布検証が成功。agent-browserで4テーマ・4方向・狭幅、固定全文、更新失敗と再試行、空比較からの更新、設定保存失敗と破損設定からの起動を確認。CIとLinux/Windowsは今回未実行。BacklogのTASK-11はDone。ユーザーの依頼により `feat/phase-4-review-ui` にコミット・pushし、未マージの `feat/phase-3-graph-diff` を比較元にPRを作成する。最新のCI結果はPRを参照。
+
+次はフェーズ5。大規模グラフの描画性能測定、各OSのCI、配布品質と初版範囲の最終確認を進める。npm公開は別途ユーザーの指示に従う。
+
+UIはgraph.mergedを描画し、明示更新成功時に選択を解除する。全文取得はsnapshot IDと旧・新パスを使い、遅延応答を照合する。Dagreのノード座標だけでなく辺の経路も使うことで循環依存の戻り線を区別する。設定保存は同一サーバー内で直列化し、一時ファイルからrenameする。破損設定の起動時は保存を禁止する。設定APIの追加に伴いsmol-tomlを実行時依存に追加した。React Flowの位置指定にはinline styleが必要なのでCSPのstyle-srcで許可し、script-srcとconnect-srcは同一originのままとした。
+
 ## フェーズ3実装後の追記（2026-09-23）
 
 フェーズ3を実装した。`ReviewSummary.graph.merged` に統合した直接近傍と解析対象外の変更ノードを追加。Gitのrename対応を参照元・参照先の両端に適用し、ノードの変更状態と辺の追加・削除・不変を判定する。旧パスの再利用とrename先を別IDで保持する。旧・新パス、元のFileChange、状態別の解析対象区分を保持し、片側だけ解析対象のrenameも一つのノードとする。
