@@ -1,3 +1,5 @@
+import type { ReviewGraph } from "../graph/model.js";
+
 export type ReviewMode = "commit" | "compare" | "." | "staged" | "working";
 export type ChangeStatus = "added" | "modified" | "deleted" | "renamed" | "unchanged";
 
@@ -37,6 +39,7 @@ export interface ReviewSummary {
   readonly before: StateDescription;
   readonly after: StateDescription;
   readonly changes: readonly FileChange[];
+  readonly graph: ReviewGraph;
 }
 
 export interface ReviewStatus {
