@@ -40,6 +40,7 @@ export interface DependencyGraph {
 }
 
 export interface ReviewGraph {
+  readonly merged: MergedGraph;
   readonly before: DependencyGraph;
   readonly after: DependencyGraph;
   readonly selection: {
@@ -50,4 +51,22 @@ export interface ReviewGraph {
   };
   // Includes references and diagnostics outside the selected neighborhood.
   readonly incomplete: boolean;
+}
+
+export interface MergedFileNode {
+  readonly id: string;
+  readonly oldPath: string | null;
+  readonly newPath: string | null;
+  readonly status: FileChange["status"];
+  readonly analyzed: { readonly before: boolean; readonly after: boolean };
+  readonly change: FileChange | null;
+}
+
+export interface MergedDependency extends FileDependency {
+  readonly status: "added" | "deleted" | "unchanged";
+}
+
+export interface MergedGraph {
+  readonly nodes: readonly MergedFileNode[];
+  readonly edges: readonly MergedDependency[];
 }

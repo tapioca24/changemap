@@ -4,8 +4,8 @@ Understand code changes through file dependency maps.
 
 This project is in development and has not been published to npm. It provides
 local Git comparisons, captured file contents, TypeScript dependency analysis, and
-a React review page with explicit refresh. Graph visualization, graph change
-classification, the full code pane, and theme settings are planned.
+graph change classification, and a React review page with explicit refresh.
+Graph visualization, the full code pane, and theme settings are planned.
 
 ## Requirements
 
@@ -130,7 +130,7 @@ refresh; explicit commit IDs remain fixed.
   silently omitted. Symlink targets are stored without reading the target file.
 - Before/after validation detects observed changes; it is not an atomic filesystem
   snapshot and cannot guarantee detection of edits reverted between reads.
-- GitHub PR/GitLab MR inputs, graph visualization and change classification, a full
+- GitHub PR/GitLab MR inputs, graph visualization, a full
   code pane, theme switching, and configuration persistence are not implemented.
 
 ## TypeScript dependency analysis
@@ -139,7 +139,18 @@ Each snapshot includes before/after dependency graphs and a direct-neighbor
 selection in `GET /api/snapshot` under `graph`. The current page still shows file
 diffs; graph rendering is Phase 4 work. Nodes are repository-relative file paths,
 and directed edges go from the referencing file to its target. Repeated references
-produce one edge. Old and new rename paths remain separate until Phase 3.
+produce one edge.
+
+`graph.merged` contains the merged direct neighborhood plus all unanalyzed changed
+files. Nodes retain `oldPath`, `newPath`, their Git change `status` (including
+`unchanged` neighbors), and the original `change` record. `analyzed.before` and
+`analyzed.after` distinguish analysis coverage from a file having no dependencies.
+Edges use node IDs and carry `added`, `deleted`, or `unchanged` status. Git-detected
+renames are matched at both endpoints before comparing edges, so updating an
+import to follow a rename preserves an unchanged dependency. Reusing an old path
+for a new file creates a separate identity. IDs are scoped to a snapshot; they are
+not a cross-refresh identity guarantee. Raw before/after graphs and the original
+path-based selection remain available. See [Phase 3 notes](docs/phase-3.md).
 
 Analysis covers `.ts`, `.tsx`, `.mts`, `.cts`, `.d.ts`, `.d.mts`, and `.d.cts`.
 JavaScript, binaries, symlinks, submodule contents, and `node_modules` are not graph

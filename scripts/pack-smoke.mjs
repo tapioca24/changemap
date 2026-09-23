@@ -98,6 +98,9 @@ async function testServer(installed) {
     assert.deepEqual(snapshot.graph.after.edges, [
       { source: "example.ts", target: "dependency.ts" },
     ]);
+    assert.deepEqual(snapshot.graph.merged.edges, [
+      { source: "after:example.ts", target: "after:dependency.ts", status: "added" },
+    ]);
     assert.equal(snapshot.graph.incomplete, false);
     writeFileSync(join(temporary, "example.ts"), "import 'target';\nexport const value = 2;\n");
     writeFileSync(
@@ -117,6 +120,9 @@ async function testServer(installed) {
     assert.equal(refreshedResponse.status, 200);
     const refreshed = await refreshedResponse.json();
     assert.notEqual(refreshed.id, snapshot.id);
+    assert.deepEqual(refreshed.graph.merged.edges, [
+      { source: "after:example.ts", target: "after:alternate.ts", status: "added" },
+    ]);
     assert.deepEqual(refreshed.graph.after.edges, [
       { source: "example.ts", target: "alternate.ts" },
     ]);
