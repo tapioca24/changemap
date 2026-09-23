@@ -1,0 +1,270 @@
+{
+  "date": "2026-09-23",
+  "viewport": [1440, 1000],
+  "results": [
+    {
+      "size": 100,
+      "edges": 300,
+      "shape": "layered",
+      "node": "v24.14.1",
+      "os": "darwin 25.6.0",
+      "cpu": "Apple M5",
+      "sample": "changemap-render-100-1",
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+      "initialMs": 136.40000000037253,
+      "interactions": [
+        {
+          "selectMs": 7,
+          "themeMs": 28.700000000186265
+        },
+        {
+          "selectMs": 34,
+          "themeMs": 32.700000000186265
+        },
+        {
+          "selectMs": 33,
+          "themeMs": 33.90000000037253
+        },
+        {
+          "selectMs": 33.69999999925494,
+          "themeMs": 33.200000000186265
+        },
+        {
+          "selectMs": 33.40000000037253,
+          "themeMs": 32.799999999813735
+        }
+      ]
+    },
+    {
+      "size": 100,
+      "edges": 300,
+      "shape": "layered",
+      "node": "v24.14.1",
+      "os": "darwin 25.6.0",
+      "cpu": "Apple M5",
+      "sample": "changemap-render-100-2",
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+      "initialMs": 138.3999999994412,
+      "interactions": [
+        {
+          "selectMs": 13.099999999627471,
+          "themeMs": 33.299999999813735
+        },
+        {
+          "selectMs": 32.90000000037253,
+          "themeMs": 33.700000000186265
+        },
+        {
+          "selectMs": 33.299999999813735,
+          "themeMs": 33.40000000037253
+        },
+        {
+          "selectMs": 32.299999999813735,
+          "themeMs": 33.40000000037253
+        },
+        {
+          "selectMs": 34.200000000186265,
+          "themeMs": 33.299999999813735
+        }
+      ]
+    },
+    {
+      "size": 100,
+      "edges": 300,
+      "shape": "layered",
+      "node": "v24.14.1",
+      "os": "darwin 25.6.0",
+      "cpu": "Apple M5",
+      "sample": "changemap-render-100-3",
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+      "initialMs": 145.69999999925494,
+      "interactions": [
+        {
+          "selectMs": 8.700000000186265,
+          "themeMs": 33.69999999925494
+        },
+        {
+          "selectMs": 32.30000000074506,
+          "themeMs": 33.39999999944121
+        },
+        {
+          "selectMs": 34.299999999813735,
+          "themeMs": 33.200000000186265
+        },
+        {
+          "selectMs": 33.40000000037253,
+          "themeMs": 33.299999999813735
+        },
+        {
+          "selectMs": 33.200000000186265,
+          "themeMs": 33.5
+        }
+      ]
+    },
+    {
+      "size": 1000,
+      "edges": 3000,
+      "shape": "layered",
+      "node": "v24.14.1",
+      "os": "darwin 25.6.0",
+      "cpu": "Apple M5",
+      "sample": "changemap-render-1000-1",
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+      "initialMs": 825.6000000005588,
+      "interactions": [
+        {
+          "selectMs": 31.5,
+          "themeMs": 42.39999999944121
+        },
+        {
+          "selectMs": 32.90000000037253,
+          "themeMs": 32.90000000037253
+        },
+        {
+          "selectMs": 34.59999999962747,
+          "themeMs": 32.799999999813735
+        },
+        {
+          "selectMs": 33,
+          "themeMs": 33.799999999813735
+        },
+        {
+          "selectMs": 33.700000000186265,
+          "themeMs": 32.90000000037253
+        }
+      ]
+    },
+    {
+      "size": 1000,
+      "edges": 3000,
+      "shape": "layered",
+      "node": "v24.14.1",
+      "os": "darwin 25.6.0",
+      "cpu": "Apple M5",
+      "sample": "changemap-render-1000-2",
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+      "initialMs": 808.2999999998137,
+      "interactions": [
+        {
+          "selectMs": 30.09999999962747,
+          "themeMs": 28
+        },
+        {
+          "selectMs": 32.799999999813735,
+          "themeMs": 33.799999999813735
+        },
+        {
+          "selectMs": 33.80000000074506,
+          "themeMs": 32.89999999944121
+        },
+        {
+          "selectMs": 33.40000000037253,
+          "themeMs": 33.09999999962747
+        },
+        {
+          "selectMs": 33.700000000186265,
+          "themeMs": 33.09999999962747
+        }
+      ]
+    },
+    {
+      "size": 1000,
+      "edges": 3000,
+      "shape": "layered",
+      "node": "v24.14.1",
+      "os": "darwin 25.6.0",
+      "cpu": "Apple M5",
+      "sample": "changemap-render-1000-3",
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+      "initialMs": 781.5999999996275,
+      "interactions": [
+        {
+          "selectMs": 24.899999999441206,
+          "themeMs": 37.60000000055879
+        },
+        {
+          "selectMs": 33.59999999962747,
+          "themeMs": 33.5
+        },
+        {
+          "selectMs": 33.799999999813735,
+          "themeMs": 32.30000000074506
+        },
+        {
+          "selectMs": 34.299999999813735,
+          "themeMs": 32.39999999944121
+        },
+        {
+          "selectMs": 34.200000000186265,
+          "themeMs": 33
+        }
+      ]
+    },
+    {
+      "size": 1000,
+      "edges": 999,
+      "shape": "chain",
+      "node": "v24.14.1",
+      "os": "darwin 25.6.0",
+      "cpu": "Apple M5",
+      "sample": "changemap-render-chain",
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+      "initialMs": 310.5,
+      "interactions": [
+        {
+          "selectMs": 19.700000000186265,
+          "themeMs": 33.19999999925494
+        },
+        {
+          "selectMs": 33.10000000055879,
+          "themeMs": 33.59999999962747
+        },
+        {
+          "selectMs": 33.299999999813735,
+          "themeMs": 32.80000000074506
+        },
+        {
+          "selectMs": 33.5,
+          "themeMs": 33.69999999925494
+        },
+        {
+          "selectMs": 33.40000000037253,
+          "themeMs": 33.200000000186265
+        }
+      ]
+    },
+    {
+      "size": 1000,
+      "edges": 999,
+      "shape": "hub",
+      "node": "v24.14.1",
+      "os": "darwin 25.6.0",
+      "cpu": "Apple M5",
+      "sample": "changemap-render-hub",
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+      "initialMs": 367.20000000018626,
+      "interactions": [
+        {
+          "selectMs": 37.59999999962747,
+          "themeMs": 29.90000000037253
+        },
+        {
+          "selectMs": 32.69999999925494,
+          "themeMs": 34
+        },
+        {
+          "selectMs": 33.5,
+          "themeMs": 33.10000000055879
+        },
+        {
+          "selectMs": 33.5,
+          "themeMs": 33.200000000186265
+        },
+        {
+          "selectMs": 33.5,
+          "themeMs": 33.09999999962747
+        }
+      ]
+    }
+  ]
+}

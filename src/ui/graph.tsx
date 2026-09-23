@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import {
   ReactFlow,
   Background,
@@ -12,7 +12,7 @@ import {
   type NodeProps,
   type Node,
 } from "@xyflow/react";
-import dagre from "@dagrejs/dagre";
+import { layoutElements } from "./layout.js";
 import type { MergedFileNode, ReviewGraph } from "../graph/model.js";
 import type { Settings } from "../shared/settings.js";
 import "@xyflow/react/dist/style.css";
@@ -41,7 +41,7 @@ type FileData = {
   direction: Settings["orientation"];
   onSelect?: () => void;
 };
-function FileNode({ data }: NodeProps<Node<FileData>>) {
+const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileData>>) {
   const source = { LR: Position.Right, RL: Position.Left, TB: Position.Bottom, BT: Position.Top }[
     data.direction
   ];
@@ -70,34 +70,8 @@ function FileNode({ data }: NodeProps<Node<FileData>>) {
       <Handle type="source" position={source} />
     </div>
   );
-}
+});
 const nodeTypes = { file: FileNode };
-export function layoutElements(graph: ReviewGraph, direction: Settings["orientation"]) {
-  const files = graph.merged.nodes.filter((n) => n.analyzed.before || n.analyzed.after);
-  const layout = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-  layout.setGraph({ rankdir: direction, ranksep: 110, nodesep: 45, marginx: 35, marginy: 35 });
-  for (const file of files) layout.setNode(file.id, { width: 230, height: 108 });
-  for (const edge of graph.merged.edges) layout.setEdge(edge.source, edge.target);
-  dagre.layout(layout);
-  const nodes = files.map((file) => ({
-    id: file.id,
-    type: "file",
-    position: { x: layout.node(file.id).x - 115, y: layout.node(file.id).y - 54 },
-    data: {
-      file,
-      direction,
-      unresolved: references(graph, file).some((ref) => ref.outcome === "unresolved"),
-    },
-    ariaLabel: `${file.newPath ?? file.oldPath}, ${file.status}`,
-    width: 230,
-    height: 108,
-  }));
-  const routes = graph.merged.edges.map((edge) => layout.edge(edge.source, edge.target).points);
-  return { nodes, routes };
-}
-export function layoutGraph(graph: ReviewGraph, direction: Settings["orientation"]) {
-  return layoutElements(graph, direction).nodes;
-}
 function DependencyEdge({
   id,
   data,
@@ -122,7 +96,7 @@ function DependencyEdge({
   );
 }
 const edgeTypes = { dependency: DependencyEdge };
-export function Graph({
+export const Graph = memo(function Graph({
   graph,
   direction,
   selected,
@@ -133,7 +107,31 @@ export function Graph({
   selected: string | null;
   onSelect(id: string): void;
 }) {
-  const { nodes, routes } = useMemo(() => layoutElements(graph, direction), [graph, direction]);
+  const { nodes, routes, failed } = useMemo(() => {
+    try {
+      return { ...layoutElements(graph, direction), failed: false };
+    } catch {
+      return { nodes: [], routes: [], failed: true };
+    }
+  }, [graph, direction]);
+  const selectableNodes = useMemo(
+    () =>
+      nodes.map((node) => ({
+        ...node,
+        data: { ...node.data, onSelect: () => onSelect(node.id) },
+        selected: false,
+      })),
+    [nodes, onSelect],
+  );
+  const displayedNodes = useMemo(
+    () =>
+      selectableNodes.map((node) => (node.id === selected ? { ...node, selected: true } : node)),
+    [selectableNodes, selected],
+  );
+  const onNodeClick = useCallback(
+    (_: unknown, node: { id: string }) => onSelect(node.id),
+    [onSelect],
+  );
   const edges = useMemo(
     () =>
       graph.merged.edges.map((edge, i) => ({
@@ -160,21 +158,43 @@ export function Graph({
       })),
     [graph, routes],
   );
+  if (failed) {
+    return (
+      <div className="notice" role="alert">
+        <p>The dependency map could not be displayed. Choose a file to review its captured code.</p>
+        <label>
+          File
+          <select
+            aria-label="File to review"
+            value={selected ?? ""}
+            onChange={(event) => {
+              if (event.target.value) onSelect(event.target.value);
+            }}
+          >
+            <option value="">Select a file</option>
+            {graph.merged.nodes
+              .filter((node) => node.analyzed.before || node.analyzed.after)
+              .map((node) => (
+                <option key={node.id} value={node.id}>
+                  {statusLabels[node.status]} · {node.newPath ?? node.oldPath}
+                </option>
+              ))}
+          </select>
+        </label>
+      </div>
+    );
+  }
   return (
     <div className="graph-canvas" aria-label="File dependency graph">
       <ReactFlow
         key={direction}
-        nodes={nodes.map((node) => ({
-          ...node,
-          data: { ...node.data, onSelect: () => onSelect(node.id) },
-          selected: node.id === selected,
-        }))}
+        nodes={displayedNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
-        onNodeClick={(_, node) => onSelect(node.id)}
+        onNodeClick={onNodeClick}
         fitView
         minZoom={0.08}
         maxZoom={2}
@@ -185,4 +205,4 @@ export function Graph({
       {!nodes.length && <p className="canvas-empty">No analyzed files in this comparison.</p>}
     </div>
   );
-}
+});
