@@ -56,6 +56,8 @@ pnpm exec changemap --version
 Use the equivalent absolute path on Windows. The tarball includes the built CLI,
 React assets, bundled dependency notices, package metadata, README, and MIT license.
 Installation also installs the pinned TypeScript Compiler API runtime dependency.
+The package smoke test installs with empty package and metadata caches and requires
+registry access. It then checks the installed CLI, analysis, assets, and refresh.
 Development sources, ts-morph, and the TypeScript 7 development compiler are not
 needed to run the installed package.
 

@@ -35,7 +35,10 @@ async function testServer(installed) {
   });
   assert.ifError(init.error);
   assert.equal(init.status, 0, init.stderr);
-  writeFileSync(join(temporary, ".gitignore"), "node_modules/\n*.tgz\n");
+  writeFileSync(
+    join(temporary, ".gitignore"),
+    "node_modules/\n*.tgz\n.pnpm-store/\n.pnpm-cache/\n",
+  );
   writeFileSync(join(temporary, "example.ts"), "import 'target';\nexport const value = 1;\n");
   writeFileSync(join(temporary, "dependency.ts"), "export {};\n");
   writeFileSync(join(temporary, "alternate.ts"), "export {};\n");
@@ -138,8 +141,18 @@ try {
   const archives = readdirSync(temporary).filter((name) => name.endsWith(".tgz"));
   assert.equal(archives.length, 1);
   writeFileSync(join(temporary, "package.json"), JSON.stringify({ private: true }));
+  // A frozen-lockfile checkout does not populate registry metadata for a fresh
+  // consumer. Install online with empty caches so developer state cannot hide
+  // missing runtime dependencies or an invalid published dependency specifier.
   runPnpm(
-    ["add", "--prod", "--ignore-scripts", "--offline", join(temporary, archives[0])],
+    [
+      "add",
+      "--prod",
+      "--ignore-scripts",
+      `--config.store-dir=${join(temporary, ".pnpm-store")}`,
+      `--config.cache-dir=${join(temporary, ".pnpm-cache")}`,
+      join(temporary, archives[0]),
+    ],
     temporary,
   );
   const installed = join(temporary, "node_modules", "changemap");
