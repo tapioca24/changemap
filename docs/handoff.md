@@ -2,13 +2,15 @@
 
 ## フェーズ5実装後の追記（2026-09-23）
 
-フェーズ5の実装とローカル検証を進めた。全入力モードの配布CLI統合、UIの更新失敗・再試行・選択解除・設定保存失敗を含め全98テストが成功。型チェック・lint・build・隔離配布検証も成功。詳細と再現手順は [phase-5.md](phase-5.md)、ブラウザの生測定値は [phase-5-measurements.json](phase-5-measurements.json)。
+フェーズ5の実装・ローカル検証・3 OS CI検証が完了した。全入力モードの配布CLI統合、UIの更新失敗・再試行・選択解除・設定保存失敗を含め全98テストが成功。型チェック・lint・build・隔離配布検証も成功。詳細と再現手順は [phase-5.md](phase-5.md)、ブラウザの生測定値は [phase-5-measurements.json](phase-5-measurements.json)。
 
 性能目標はユーザー承認済み。表示100ノード/300辺で1秒、1,000ノード/3,000辺で3秒、選択・テーマ変更300ms。10,000ノードは限界測定。M5/macOS/Chromium 153で100ノード初期136–146ms、1,000ノード781–826ms、操作43ms以下。memo化と未解決参照索引により不要なグラフ再描画を削減した。10,000ノードはDagreのスタック上限に達するため対応済みとはしない。配置例外時もファイル選択から固定コードを読める。同期配置の長時間処理を中断する機能はない。
 
-UI本体はsrc/ui/app.tsx、配置はsrc/ui/layout.tsへ分離した。CIに1,000ノード配置の構造検証を追加。phase 4の既存CI全6ジョブは成功を確認したが、今回の変更は未pushでphase 5の3 OS CIは未確認。TASK-12はこのCI確認が残るためIn Progress。npm公開・バージョン更新は別途ユーザー指示が必要。
+UI本体はsrc/ui/app.tsx、配置はsrc/ui/layout.tsへ分離した。CIに1,000ノード配置の構造検証を追加。実装コミット `4d09593` はpush済みで、[PR #6](https://github.com/tapioca24/changemap/pull/6) を作成済み。[CI run 35848465588](https://github.com/tapioca24/changemap/actions/runs/35848465588)でLinux/macOS/Windows × Node.js 24.11.0/24.x全6ジョブ成功を2026-09-23に確認。TASK-12はDone。ブラウザ描画性能の測定はmacOSのみ。
 
-開始時からpackage.jsonとpnpm-lock.yamlにbuild実行時依存を追加するユーザー変更があり、保持している。今回追加したpackage scriptsと混同してコミットしないこと。
+実装開始時のpackage.jsonとpnpm-lock.yamlのbuild実行時依存追加は保持され、現在はコミット済み。
+
+残る作業はPR #1〜#6のレビュー・依存順のマージと、初版のバージョン設定・npm公開。PRはフェーズ0から5まで前段ブランチを比較元に積み重なっており、2026-09-23確認時点ですべて未マージ。npm公開・バージョン更新は別途ユーザー指示が必要。以下の各フェーズ追記は当時の記録として保持する。
 
 ## フェーズ4実装後の追記（2026-09-23）
 

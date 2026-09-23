@@ -46,7 +46,7 @@ Acceptance: each supported mode produces stable comparison data, including non-T
 
 ## Phase 2: TypeScript dependency graph
 
-Implemented and locally verified; see [Phase 2 notes](phase-2.md) for coverage, strategy selection, performance measurements, and remaining boundaries. CI for this phase has not been run.
+Implemented and locally verified; see [Phase 2 notes](phase-2.md) for coverage, strategy selection, performance measurements, and remaining boundaries. The integrated Phase 5 commit has passed the six-job CI matrix; see [Phase 5 notes](phase-5.md).
 
 - Define the internal graph model for file nodes and directed file dependencies.
 - Analyze `.ts`, `.tsx`, `.mts`, `.cts`, and declaration files (`.d.ts`, `.d.mts`, `.d.cts`). Keep JavaScript files outside dependency analysis while allowing changed JavaScript files to be reviewed as unanalyzed diffs; cover these boundaries with fixtures.
@@ -80,7 +80,7 @@ Acceptance: merged graph fixtures classify node and edge statuses correctly, inc
 
 ## Phase 4: review UI and themes
 
-Implemented and locally verified; see [Phase 4 notes](phase-4.md). CI and other OSes have not been run for this phase.
+Implemented and locally verified; see [Phase 4 notes](phase-4.md). The integrated Phase 5 commit has passed the three-OS CI matrix; browser performance measurements remain macOS-only.
 
 - Build the React Flow graph view (confirmed graph UI technology) with stable node identity and selection; select the automatic layout engine separately.
 - Add the right-hand code pane: diff by default, full-file toggle, full old content for deleted files, and rename metadata.
@@ -103,7 +103,7 @@ Acceptance: selecting any node opens the correct content, switching theme update
 
 ## Phase 5: quality and release
 
-Implementation and local verification are recorded in [Phase 5 notes](phase-5.md). The release commit still needs the six-job CI matrix; npm publication remains a separate authorized step.
+Implementation and local verification are recorded in [Phase 5 notes](phase-5.md). Implementation commit `4d09593` passed all six CI jobs on Linux/macOS/Windows with Node.js 24.11.0/24.x ([CI run](https://github.com/tapioca24/changemap/actions/runs/35848465588), verified 2026-09-23). TASK-12 is Done. PRs #1–#6 remain open; merging, versioning, and npm publication are still pending. npm publication remains a separate authorized step.
 
 - Add fixtures and integration tests for every CLI mode, Git status, dependency extraction, graph diff, refresh detection, settings persistence, and rendering states.
 - Test large-graph behavior and record measured limits; keep analysis and rendering responsive enough for the first supported project sizes.
