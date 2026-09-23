@@ -1,0 +1,43 @@
+{
+  "name": "changemap",
+  "version": "0.0.0",
+  "description": "Understand code changes through file dependency maps.",
+  "license": "MIT",
+  "author": "tapioca24",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tapioca24/changemap.git"
+  },
+  "bin": {
+    "changemap": "dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "tsdown",
+    "test": "pnpm build && vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --deny-warnings",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "prepack": "pnpm build",
+    "test:pack": "node scripts/pack-smoke.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.4",
+    "backlog.md": "1.51.0",
+    "oxfmt": "0.67.0",
+    "oxlint": "1.82.0",
+    "tsdown": "0.23.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  },
+  "engines": {
+    "node": ">=24.11.0 <25"
+  },
+  "packageManager": "pnpm@10.33.0"
+}
