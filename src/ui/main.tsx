@@ -1,80 +1,32 @@
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
-import type {
-  FileChange,
-  ReviewStatus,
-  ReviewSummary,
-  StateDescription,
-} from "../shared/review.js";
+import { flavors } from "@catppuccin/palette";
+import type { ReviewStatus, ReviewSummary } from "../shared/review.js";
+import {
+  defaults,
+  themes,
+  orientations,
+  type Settings,
+  type SettingsState,
+} from "../shared/settings.js";
+import { request } from "./api.js";
+import { Graph, statusLabels } from "./graph.js";
+import { CodePane } from "./code-pane.js";
 import "./style.css";
-
-async function request<T>(path: string, method = "GET"): Promise<T> {
-  const response = await fetch(path, { method, headers: { "X-Changemap-Request": "1" } });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? `Request failed (${response.status}).`);
-  return data as T;
-}
-
-function StateLabel({ state }: { state: StateDescription }) {
-  return (
-    <>
-      <strong>{state.label}</strong>
-      <code>{state.commit?.slice(0, 8) ?? state.kind}</code>
-    </>
-  );
-}
-
-function ChangedFile({ change }: { change: FileChange }) {
-  const path = change.newPath ?? change.oldPath!;
-  return (
-    <details className="file">
-      <summary>
-        <span className={`change-status ${change.status}`}>{change.status}</span>
-        <span className="file-path">
-          {path}
-          {change.status === "renamed" && <small>from {change.oldPath}</small>}
-        </span>
-        <span className="file-kind">{change.binary ? "binary" : "text"}</span>
-        <span className="disclosure" aria-hidden="true">
-          +
-        </span>
-      </summary>
-      {change.binary ? (
-        <div className="file-note">Text diff unavailable for this binary file.</div>
-      ) : change.patch ? (
-        <pre role="region" aria-label={`Diff for ${path}`} tabIndex={0}>
-          {change.patch.split("\n").map((line, i) => (
-            <span
-              key={i}
-              className={
-                line.startsWith("+")
-                  ? "line-add"
-                  : line.startsWith("-")
-                    ? "line-delete"
-                    : line.startsWith("@@")
-                      ? "line-hunk"
-                      : undefined
-              }
-            >
-              {line}
-              {"\n"}
-            </span>
-          ))}
-        </pre>
-      ) : (
-        <div className="file-note">No text changes.</div>
-      )}
-    </details>
-  );
-}
 
 function App() {
   const [snapshot, setSnapshot] = useState<ReviewSummary | null>(null);
   const [status, setStatus] = useState<ReviewStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-
+  const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [settings, setSettings] = useState<Settings>(defaults);
+  const [settingsReady, setSettingsReady] = useState(false);
+  const [settingsWarning, setSettingsWarning] = useState<string | null>(null);
+  const settingsRef = useRef(settings);
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const saveVersion = useRef(0);
   useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -84,6 +36,21 @@ function App() {
       })
       .catch((reason: Error) => {
         if (!disposed) setError(reason.message);
+      });
+    request<SettingsState>("/api/settings")
+      .then((next) => {
+        if (!disposed) {
+          setSettings(next.settings);
+          settingsRef.current = next.settings;
+          setSettingsWarning(next.warning);
+          setSettingsReady(true);
+        }
+      })
+      .catch(() => {
+        if (!disposed) {
+          setSettingsWarning("Settings could not be loaded. Defaults are active.");
+          setSettingsReady(true);
+        }
       });
     const poll = async () => {
       try {
@@ -104,12 +71,28 @@ function App() {
       clearTimeout(timer);
     };
   }, []);
-
+  function changeSettings(next: Settings) {
+    settingsRef.current = next;
+    setSettings(next);
+    const version = ++saveVersion.current;
+    saveQueue.current = saveQueue.current.then(async () => {
+      try {
+        const result = await request<SettingsState>("/api/settings", "POST", next);
+        if (version === saveVersion.current) setSettingsWarning(result.warning);
+      } catch {
+        if (version === saveVersion.current)
+          setSettingsWarning(
+            "Settings could not be saved. These changes may not persist across restarts.",
+          );
+      }
+    });
+  }
   async function refresh() {
     setBusy(true);
     try {
       const next = await request<ReviewSummary>("/api/refresh", "POST");
       setSnapshot(next);
+      setSelected(null);
       setStatus({ snapshotId: next.id, stale: false, refreshing: false, error: null });
       setError(null);
       setConnectionError(null);
@@ -119,123 +102,216 @@ function App() {
       setBusy(false);
     }
   }
-
   const stale = status?.stale || (snapshot && status && snapshot.id !== status.snapshotId);
   const notice = error ?? status?.error ?? connectionError;
-  const repository = snapshot?.repository.split(/[/\\]/).pop();
+  const node = snapshot?.graph.merged.nodes.find((n) => n.id === selected);
+  const palette = flavors[settings.theme];
+  const style = Object.fromEntries(
+    palette.colorEntries.map(([name, color]) => [`--${name}`, color.hex]),
+  ) as CSSProperties;
   return (
-    <div className="app">
+    <div className="app" style={style} data-theme={settings.theme}>
       <header className="topbar">
-        <a className="wordmark" href="/" aria-label="changemap home">
-          <span className="brand-mark" aria-hidden="true">
-            ↗
-          </span>
-          changemap
+        <a className="wordmark" href="/">
+          ↗ changemap
         </a>
-        <span className="local-label">
-          <span aria-hidden="true">●</span> LOCAL REVIEW
-        </span>
+        <span className="local-label">LOCAL / REVIEW</span>
+        <div className="settings">
+          <label>
+            Theme
+            <select
+              value={settings.theme}
+              disabled={!settingsReady}
+              onChange={(event) =>
+                changeSettings({
+                  ...settingsRef.current,
+                  theme: event.target.value as Settings["theme"],
+                })
+              }
+            >
+              {themes.map((theme) => (
+                <option key={theme} value={theme}>
+                  {flavors[theme].name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Direction
+            <select
+              value={settings.orientation}
+              disabled={!settingsReady}
+              onChange={(event) =>
+                changeSettings({
+                  ...settingsRef.current,
+                  orientation: event.target.value as Settings["orientation"],
+                })
+              }
+            >
+              {orientations.map((direction) => (
+                <option key={direction} value={direction}>
+                  {
+                    {
+                      LR: "Left → right",
+                      TB: "Top → bottom",
+                      RL: "Right → left",
+                      BT: "Bottom → top",
+                    }[direction]
+                  }
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </header>
       <main>
-        <div className="eyebrow">
-          {repository ?? "YOUR REPOSITORY"}
-          <span>/</span>CHANGES
-        </div>
-        <div className="title-row">
+        <div className="review-heading">
           <div>
-            <h1>A moment in your code.</h1>
-            <p className="intro">Read the changes. Refresh when you’re ready.</p>
+            <p className="eyebrow">
+              {snapshot?.repository.split(/[/\\]/).pop() ?? "YOUR REPOSITORY"}
+            </p>
+            <h1>Follow the change.</h1>
           </div>
           <button
-            onClick={() => void refresh()}
-            disabled={busy || status?.refreshing}
             className="refresh"
+            disabled={busy || status?.refreshing}
+            onClick={() => void refresh()}
           >
-            {busy ? "Capturing…" : notice ? "Retry refresh" : "Refresh comparison"}
-            <span aria-hidden="true">↻</span>
+            {busy ? "Capturing…" : notice ? "Retry refresh" : "Refresh comparison"} ↻
           </button>
         </div>
+        {settingsWarning && (
+          <div className="notice" role="status">
+            {settingsWarning}
+          </div>
+        )}
         {notice && (
           <div className="notice error" role="alert">
             {notice}
-            <small>Your captured comparison is kept until a refresh succeeds.</small>
+            <small>Your captured graph and code are kept until a refresh succeeds.</small>
           </div>
         )}
         {stale && !notice && (
           <div className="notice" role="status">
-            New changes are available.
-            <small>You’re still viewing the captured comparison. Refresh to update it.</small>
+            New changes are available.{" "}
+            <small>The captured graph and code stay fixed until you refresh.</small>
           </div>
         )}
         {snapshot ? (
           <>
             <section className="comparison" aria-label="Comparison targets">
               <div>
-                <span className="caption">BEFORE</span>
-                <StateLabel state={snapshot.before} />
+                <small>BEFORE</small>
+                <strong>{snapshot.before.label}</strong>
+                <code>{snapshot.before.commit?.slice(0, 8) ?? snapshot.before.kind}</code>
               </div>
-              <span className="direction" role="img" aria-label="to">
-                →
-              </span>
+              <span>→</span>
               <div>
-                <span className="caption">AFTER</span>
-                <StateLabel state={snapshot.after} />
+                <small>AFTER</small>
+                <strong>{snapshot.after.label}</strong>
+                <code>{snapshot.after.commit?.slice(0, 8) ?? snapshot.after.kind}</code>
               </div>
               <div className="capture-time">
-                <span className="caption">CAPTURED</span>
+                <small>{snapshot.changes.length} CHANGED FILES</small>
                 <time dateTime={snapshot.capturedAt}>
                   {new Date(snapshot.capturedAt).toLocaleTimeString()}
                 </time>
-                <span className="snapshot-state">
-                  {stale ? "Update available" : "Snapshot held"}
-                </span>
+                <span>{stale ? "Update available" : "Snapshot held"}</span>
               </div>
             </section>
-            <section className="changes" aria-label="Changed files">
-              <div className="section-heading">
-                <h2>
-                  Changed files <span>{snapshot.changes.length.toString().padStart(2, "0")}</span>
-                </h2>
-                <span>BEFORE → AFTER</span>
+            {snapshot.graph.incomplete && (
+              <details className="notice analysis" open>
+                <summary>Dependency analysis is incomplete. Direct users may be missing.</summary>
+                <p>
+                  Resolved dependencies and code remain available. Unresolved references may exist
+                  outside the displayed graph.
+                </p>
+                <ul>
+                  {(["before", "after"] as const).flatMap((side) =>
+                    snapshot.graph[side].diagnostics.map((diagnostic, i) => (
+                      <li key={`${side}-${i}`}>
+                        {side} · {diagnostic.path}: {diagnostic.message}
+                      </li>
+                    )),
+                  )}
+                </ul>
+              </details>
+            )}
+            {snapshot.changes.length ? (
+              <div className="workspace" key={snapshot.id}>
+                <section className="map-pane" aria-label="Change map">
+                  <div className="map-heading">
+                    <h2>Change map</h2>
+                    <span>Reference source → target</span>
+                  </div>
+                  <div className="legend" aria-label="Graph legend">
+                    {Object.entries(statusLabels).map(([status, label]) => (
+                      <span className={`status ${status}`} key={status}>
+                        {label}
+                      </span>
+                    ))}
+                    <small>Edges: + added · − dashed deleted · solid unchanged</small>
+                  </div>
+                  <Graph
+                    graph={snapshot.graph}
+                    direction={settings.orientation}
+                    selected={selected}
+                    onSelect={setSelected}
+                  />
+                  <section className="unanalyzed" aria-label="Unanalyzed changed files">
+                    <h3>Outside dependency analysis</h3>
+                    <div>
+                      {snapshot.graph.merged.nodes
+                        .filter((n) => !n.analyzed.before && !n.analyzed.after)
+                        .map((n) => (
+                          <button
+                            className={`unanalyzed-node ${n.status}`}
+                            key={n.id}
+                            aria-pressed={selected === n.id}
+                            onClick={() => setSelected(n.id)}
+                          >
+                            <span>{statusLabels[n.status]}</span>
+                            <strong>{n.newPath ?? n.oldPath}</strong>
+                            {n.change?.binary && <small>Binary</small>}
+                          </button>
+                        ))}
+                    </div>
+                    <p>
+                      These files are not analyzed; this does not mean they have no dependencies.
+                    </p>
+                  </section>
+                </section>
+                {node ? (
+                  <CodePane key={node.id} snapshot={snapshot} node={node} />
+                ) : (
+                  <aside className="code-pane empty-pane">
+                    <span>↖</span>
+                    <h2>Select a file</h2>
+                    <p>Follow a dependency or choose a changed file to read its captured code.</p>
+                  </aside>
+                )}
               </div>
-              {snapshot.changes.length ? (
-                <div key={snapshot.id}>
-                  {snapshot.changes.map((change) => (
-                    <ChangedFile key={change.newPath ?? change.oldPath} change={change} />
-                  ))}
-                </div>
-              ) : (
-                <div className="empty">
-                  <span aria-hidden="true">✓</span>
-                  <h3>No changes</h3>
-                  <p>These two states match. New changes will appear here after you refresh.</p>
-                </div>
-              )}
-            </section>
+            ) : (
+              <section className="empty">
+                <span>✓</span>
+                <h2>No changes</h2>
+                <p>These two states match. New changes appear after you refresh.</p>
+              </section>
+            )}
             <footer>
-              <span>
-                Captured locally ·{" "}
-                {snapshot.mode === "commit"
-                  ? "Single commit"
-                  : snapshot.mode === "compare"
-                    ? "Direct comparison"
-                    : snapshot.mode}
-              </span>
-              <span>Closing this tab keeps the server running. Stop it with Ctrl+C.</span>
+              <span>Captured locally · {snapshot.mode}</span>
+              <span>Stop the server with Ctrl+C.</span>
             </footer>
           </>
         ) : (
-          <div className="loading" role="status">
-            {notice
-              ? "The comparison could not be loaded. Use Retry refresh to try again."
-              : "Loading your comparison…"}
-          </div>
+          <p role="status">
+            {notice ? "Use Retry refresh to load the comparison." : "Loading your comparison…"}
+          </p>
         )}
       </main>
     </div>
   );
 }
-
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />

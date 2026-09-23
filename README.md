@@ -3,9 +3,9 @@
 Understand code changes through file dependency maps.
 
 This project is in development and has not been published to npm. It provides
-local Git comparisons, captured file contents, TypeScript dependency analysis, and
-graph change classification, and a React review page with explicit refresh.
-Graph visualization, the full code pane, and theme settings are planned.
+local Git comparisons, captured file contents, TypeScript dependency analysis,
+and an interactive React Flow change map with a code pane, four Catppuccin themes,
+and explicit refresh.
 
 ## Requirements
 
@@ -130,14 +130,54 @@ refresh; explicit commit IDs remain fixed.
   silently omitted. Symlink targets are stored without reading the target file.
 - Before/after validation detects observed changes; it is not an atomic filesystem
   snapshot and cannot guarantee detection of edits reverted between reads.
-- GitHub PR/GitLab MR inputs, graph visualization, a full
-  code pane, theme switching, and configuration persistence are not implemented.
+- GitHub PR/GitLab MR inputs, comments, graph expansion, and format-specific binary
+  previews are not implemented.
+
+## Review UI and settings
+
+Select a file in the change map to read its diff or captured before/after contents.
+Deleted files initially show their old full contents; unchanged neighbors show
+full contents. Renames retain both paths. Binary files show a text-unavailable
+message. Files outside dependency analysis appear in a separate area.
+
+The graph uses Dagre layout with left-to-right, top-to-bottom, right-to-left, and
+bottom-to-top orientations. Arrows always point from the referencing file to its
+target. Node labels supplement status colors. Added edges have a `+ added` label;
+deleted edges have a `− deleted` label and a dashed line. Use the zoom and fit
+controls or pan the canvas. Select file buttons with Enter or Space.
+
+Unresolved references mark source nodes and show locations and reasons in the
+code pane, separately from intentionally excluded external references. A global
+notice also covers incomplete analysis outside the displayed neighborhood.
+
+New changes trigger a notification while the current graph and code remain
+fixed. Refresh replaces the entire captured comparison and clears file selection;
+a failed refresh preserves it and provides a retry action.
+
+Theme and direction changes apply immediately and are shared across projects.
+The bundled themes are Latte, Frappé, Macchiato, and Mocha (default); the default
+direction is LR. Settings are saved at `$XDG_CONFIG_HOME/changemap/config.toml`
+when `XDG_CONFIG_HOME` is an absolute path, otherwise at
+`~/.config/changemap/config.toml` on all supported platforms. Starting the CLI
+does not create the file; the first UI setting change does.
+
+```toml
+theme = "mocha" # latte | frappe | macchiato | mocha
+orientation = "LR" # LR | TB | RL | BT
+```
+
+Missing keys use defaults. Invalid TOML or unsupported values cause a warning and
+start with defaults; settings then apply only to that server session and the
+original file is preserved. Saving failures also preserve the existing file and
+keep changes active in the UI with a warning. Writes use a temporary file and
+rename; unknown keys are retained, but comments and formatting are not. There are
+no project-specific overrides or theme/direction CLI flags.
 
 ## TypeScript dependency analysis
 
 Each snapshot includes before/after dependency graphs and a direct-neighbor
-selection in `GET /api/snapshot` under `graph`. The current page still shows file
-diffs; graph rendering is Phase 4 work. Nodes are repository-relative file paths,
+selection in `GET /api/snapshot` under `graph`. The page renders the merged
+change map. Nodes represent repository-relative file paths,
 and directed edges go from the referencing file to its target. Repeated references
 produce one edge.
 

@@ -53,6 +53,7 @@ async function testServer(installed) {
     [join(installed, metadata.bin.changemap), ".", "--no-open"],
     {
       cwd: temporary,
+      env: { ...process.env, XDG_CONFIG_HOME: join(temporary, ".git", "config-home") },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -93,6 +94,17 @@ async function testServer(installed) {
       assert.equal(response.status, 200);
       assert.ok((await response.text()).length > 100);
     }
+    const config = join(temporary, ".git", "config-home", "changemap", "config.toml");
+    const settings = await fetch(`${url}/api/settings`).then((response) => response.json());
+    assert.deepEqual(settings.settings, { theme: "mocha", orientation: "LR" });
+    assert.equal(existsSync(config), false);
+    const saved = await fetch(`${url}/api/settings`, {
+      method: "POST",
+      headers: { "X-Changemap-Request": "1", "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: "latte", orientation: "BT" }),
+    }).then((response) => response.json());
+    assert.equal(saved.warning, null);
+    assert.match(readFileSync(config, "utf8"), /theme = "latte"/);
     const snapshot = await fetch(`${url}/api/snapshot`).then((response) => response.json());
     assert.ok(snapshot.changes.some((change) => change.newPath === "example.ts"));
     assert.deepEqual(snapshot.graph.after.edges, [
@@ -183,7 +195,7 @@ try {
   assert.equal(version.stderr, "");
   await testServer(installed);
   console.log(
-    `Packed CLI, React assets, dependency analysis, full contents and refresh passed in an isolated directory (${process.platform}, ${process.version}).`,
+    `Packed CLI, React assets, settings, dependency analysis, full contents and refresh passed in an isolated directory (${process.platform}, ${process.version}).`,
   );
 } finally {
   rmSync(temporary, { recursive: true, force: true });

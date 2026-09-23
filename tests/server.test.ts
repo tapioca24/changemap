@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { get } from "node:http";
 import { afterEach, expect, test, vi } from "vitest";
@@ -14,7 +16,11 @@ afterEach(async () => {
 const assets = fileURLToPath(new URL("../dist/ui/", import.meta.url));
 async function serve(root: string, args = ["."]) {
   const session = await ReviewSession.create(new SnapshotSource(root, parseInput(args)));
-  const server = await startServer(session, { assets, pollIntervalMs: 25 });
+  const server = await startServer(session, {
+    assets,
+    pollIntervalMs: 25,
+    configPath: join(root, ".git", "changemap-config.toml"),
+  });
   servers.push(server);
   const request = (path: string, init?: RequestInit) => fetch(`${server.url}${path}`, init);
   return { session, server, request };
@@ -145,4 +151,51 @@ test("occupied ports produce an actionable error without replacing the existing 
     startServer(session, { assets, port: Number(new URL(server.url).port) }),
   ).rejects.toMatchObject({ code: "EADDRINUSE" });
   expect((await fetch(server.url)).status).toBe(200);
+});
+
+test("settings API validates requests, saves explicitly, and restores on server restart", async () => {
+  const repo = await repository();
+  const { request, server } = await serve(repo.root);
+  const path = join(repo.root, ".git", "changemap-config.toml");
+  const initial = await request("/api/settings").then((response) => response.json());
+  expect(initial.settings).toEqual({ theme: "mocha", orientation: "LR" });
+  await expect(readFile(path)).rejects.toMatchObject({ code: "ENOENT" });
+  const settings = { theme: "frappe", orientation: "RL" };
+  expect(
+    (await request("/api/settings", { method: "POST", body: JSON.stringify(settings) })).status,
+  ).toBe(403);
+  const headers = { "X-Changemap-Request": "1" };
+  expect((await request("/api/settings", { method: "POST", headers, body: "{" })).status).toBe(400);
+  expect(
+    (
+      await request("/api/settings", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ theme: "bad" }),
+      })
+    ).status,
+  ).toBe(400);
+  expect(
+    (
+      await request("/api/settings", {
+        method: "POST",
+        headers: { ...headers, Origin: "https://example.com" },
+        body: JSON.stringify(settings),
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await request("/api/settings", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(settings),
+      }).then((response) => response.json())
+    ).warning,
+  ).toBeNull();
+  await server.close();
+  const restarted = await serve(repo.root);
+  expect(
+    (await restarted.request("/api/settings").then((response) => response.json())).settings,
+  ).toEqual(settings);
 });

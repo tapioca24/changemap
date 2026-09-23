@@ -29,13 +29,19 @@
     "benchmark:analysis": "node scripts/benchmark-analysis.mjs"
   },
   "dependencies": {
+    "smol-toml": "^1.8.0",
     "typescript-api": "npm:typescript@6.0.2"
   },
   "devDependencies": {
+    "@catppuccin/palette": "^1.8.0",
+    "@dagrejs/dagre": "^3.1.1",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^24.13.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@xyflow/react": "^12.11.6",
     "backlog.md": "1.51.0",
+    "jsdom": "^30.0.1",
     "oxfmt": "0.67.0",
     "oxlint": "1.82.0",
     "react": "^19.3.0",
