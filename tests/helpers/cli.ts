@@ -1,10 +1,12 @@
 import { spawn } from "node:child_process";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export async function launchCli(cwd: string, args: string[]) {
   const executable = fileURLToPath(new URL("../../dist/cli.mjs", import.meta.url));
   const child = spawn(process.execPath, [executable, ...args], {
     cwd,
+    env: { ...process.env, XDG_CONFIG_HOME: join(cwd, ".git", "test-config") },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";

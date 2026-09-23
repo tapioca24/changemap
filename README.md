@@ -34,6 +34,8 @@ node dist/cli.mjs --version
 | `pnpm format:check`                   | Check formatting without writing                              |
 | `pnpm build`                          | Build the ESM CLI and bundled React app into `dist/`          |
 | `pnpm test:pack`                      | Pack, install in isolation, and test CLI, assets, and refresh |
+| `pnpm benchmark:layout 1000`          | Measure layout time and Node process peak RSS                 |
+| `pnpm benchmark:rendering 1000`       | Measure the production UI with an installed agent-browser     |
 | `pnpm benchmark:analysis`             | Measure cold/warm snapshot analysis in fresh processes        |
 | `pnpm exec backlog task list --plain` | View project tasks                                            |
 
@@ -94,8 +96,8 @@ in `staged` and B -> C in `working`. Returning the working file to A yields no n
 change in `.`. Non-TypeScript files and Git-detected renames are included; binary
 changes have an explicit text-diff-unavailable state.
 
-The page shows the comparison targets and expandable text diffs, including an
-empty state when there are no changes. The server retains full before/after file
+The page shows the comparison targets, a dependency map, and a code pane, including
+an empty state when there are no changes. The server retains full before/after file
 contents, including unchanged files and repository analysis settings. Editing a
 file after capture does not change the stored content.
 
@@ -242,3 +244,64 @@ See [the roadmap](docs/roadmap.md), [Phase 1 notes](docs/phase-1.md), and
 ## License
 
 [MIT](LICENSE)
+
+## First release scope and measured limits
+
+The first release covers local Git comparisons, TypeScript file dependencies,
+changed-file status and edge differences, captured code, explicit refresh, and
+four persisted themes/orientations. It requires Node.js 24.11.0 through 24.x and
+Git; the CI matrix covers Linux, macOS, and Windows with the minimum and latest
+Node.js 24. Publication is a separate release step; the checkout version remains
+`0.0.0`. GitHub/GitLab review inputs, comments, directory grouping, graph expansion,
+syntax highlighting, and binary previews are outside this release.
+
+On an Apple M5 / macOS 26 (Darwin 25.6.0), Node.js 24.14.1, headless Chromium 153,
+and a 1440 × 1000 viewport, the production UI produced these synthetic results:
+
+| Displayed nodes / edges | Initial display, three runs | Worst selection | Worst theme change |
+| ----------------------- | --------------------------- | --------------- | ------------------ |
+| 100 / 300               | 136–146 ms                  | 35 ms           | 34 ms              |
+| 1,000 / 3,000           | 781–826 ms                  | 35 ms           | 43 ms              |
+
+Times measure the beginning of the HTML head script through DOM readiness and two
+animation frames, and five selections/theme changes per run. They exclude CLI
+startup, Git capture, and analysis; they are not GPU completion or real-user INP.
+The synthetic API serves complete review data to the unchanged production UI.
+The provisional targets are 1 s / 3 s initial display for the two sizes and
+300 ms for selection/theme changes. Results vary with hardware and graph shape;
+they do not guarantee every 1,000-node graph is fast. Large maps require zooming
+and panning to read labels. Browser rendering on other OSes is not yet measured.
+
+A 10,000-node / 30,000-edge layered graph exceeded the layout call-stack limit.
+The UI now offers a file selector when layout throws, so captured code stays
+available. This is a measured limitation, not support for 10,000-node rendering;
+very slow layouts still run synchronously and cannot be cancelled. Repository
+size is different from displayed graph size: a separate 10,000-file analysis
+fixture selected only six files and took 655 ms initially / 589 ms on reanalysis,
+with 741 MiB peak Node RSS. These small synthetic source files are not a
+real-project memory guarantee, and Node RSS does not include the browser.
+
+Reproduce after `pnpm build` (rendering additionally requires `agent-browser` and
+its Chromium installation):
+
+```sh
+pnpm benchmark:analysis 100 10000
+pnpm benchmark:layout 1000
+pnpm benchmark:rendering 100
+pnpm benchmark:rendering 1000
+pnpm benchmark:rendering 1000 chain
+pnpm benchmark:rendering 1000 hub
+pnpm benchmark:rendering 10000
+```
+
+The rendering runner starts a loopback fixture server and its own browser session,
+then closes both. It reports JSON lines, exits nonzero on failed performance
+targets (up to 1,000 nodes), and also exits nonzero when layout falls back or a
+browser error occurs. The 10,000-node command is expected to report the measured
+limit. An optional fourth argument writes a screenshot. CI runs the layout
+benchmark as a structural smoke check without timing thresholds; Chromium
+measurements are currently a separate local check.
+
+Before publishing, run the full CI matrix for the release commit and
+`pnpm test:pack`, confirm README/license/build output, and choose a release version.
+No publish step is run automatically by CI.

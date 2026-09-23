@@ -103,6 +103,8 @@ Acceptance: selecting any node opens the correct content, switching theme update
 
 ## Phase 5: quality and release
 
+Implementation and local verification are recorded in [Phase 5 notes](phase-5.md). The release commit still needs the six-job CI matrix; npm publication remains a separate authorized step.
+
 - Add fixtures and integration tests for every CLI mode, Git status, dependency extraction, graph diff, refresh detection, settings persistence, and rendering states.
 - Test large-graph behavior and record measured limits; keep analysis and rendering responsive enough for the first supported project sizes.
 - Verify packaging with `pnpm pack` and an isolated install of the `changemap` binary.

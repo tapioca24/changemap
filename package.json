@@ -26,9 +26,12 @@
     "format:check": "oxfmt --check .",
     "prepack": "pnpm build",
     "test:pack": "node scripts/pack-smoke.mjs",
-    "benchmark:analysis": "node scripts/benchmark-analysis.mjs"
+    "benchmark:analysis": "node scripts/benchmark-analysis.mjs",
+    "benchmark:rendering": "node scripts/benchmark-rendering.mjs",
+    "benchmark:layout": "node scripts/benchmark-layout.mjs"
   },
   "dependencies": {
+    "build": "^0.1.4",
     "smol-toml": "^1.8.0",
     "typescript-api": "npm:typescript@6.0.2"
   },

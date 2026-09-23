@@ -97,3 +97,50 @@ test.skipIf(process.platform === "win32")(
     await expect(fetch(running.url)).rejects.toThrow();
   },
 );
+
+test.each([
+  { name: "default", args: [], before: 1, after: 2 },
+  { name: "HEAD alias", args: ["@"], before: 1, after: 2 },
+  { name: "single branch", args: ["main"], before: 1, after: 2 },
+  { name: "two revisions", args: ["main", "HEAD~1"], before: 1, after: 2 },
+  { name: "combined worktree", args: ["."], before: 2, after: 4 },
+  { name: "staged", args: ["staged"], before: 2, after: 3 },
+  { name: "working", args: ["working"], before: 3, after: 4 },
+])(
+  "built CLI $name serves consistent full contents and merged dependencies",
+  async ({ args, before, after }) => {
+    const repo = await repository();
+    await repo.write("dependency.ts", "export {};\n");
+    const content = (value: number) => `import './dependency';\nexport const value = ${value};\n`;
+    await repo.write("file.ts", content(1));
+    await repo.commit();
+    await repo.write("file.ts", content(2));
+    await repo.commit();
+    await repo.write("file.ts", content(3));
+    await repo.git(["add", "file.ts"]);
+    await repo.write("file.ts", content(4));
+    const running = await launchCli(repo.root, [...args, "--no-open"]);
+    try {
+      const snapshot = await fetch(`${running.url}/api/snapshot`).then((response) =>
+        response.json(),
+      );
+      expect(snapshot.changes).toHaveLength(1);
+      expect(snapshot.changes[0]).toMatchObject({ status: "modified", newPath: "file.ts" });
+      expect(snapshot.graph.merged.edges).toHaveLength(1);
+      expect(snapshot.graph.merged.edges[0].status).toBe("unchanged");
+      expect(snapshot.graph.incomplete).toBe(false);
+      for (const [side, value] of [
+        ["before", before],
+        ["after", after],
+      ] as const) {
+        const response = await fetch(
+          `${running.url}/api/file?${new URLSearchParams({ side, path: "file.ts", snapshot: snapshot.id })}`,
+        );
+        expect(response.status).toBe(200);
+        expect((await response.json()).content).toBe(content(value));
+      }
+    } finally {
+      await running.stop();
+    }
+  },
+);

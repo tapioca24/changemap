@@ -3,7 +3,9 @@ import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, act } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { CodePane } from "../src/ui/code-pane.js";
-import { layoutGraph } from "../src/ui/graph.js";
+import dagre from "@dagrejs/dagre";
+import { Graph } from "../src/ui/graph.js";
+import { layoutGraph } from "../src/ui/layout.js";
 import type { ReviewSummary } from "../src/shared/review.js";
 import type { MergedFileNode } from "../src/graph/model.js";
 const file = (id: string): MergedFileNode => ({
@@ -45,6 +47,7 @@ const snapshot: ReviewSummary = {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 test.each(["LR", "RL", "TB", "BT"] as const)(
   "layout %s respects direction and includes isolated files",
@@ -145,4 +148,18 @@ test("rename paths and unresolved vs intentionally excluded references remain di
   expect(screen.getByText(/1 unresolved · 1 intentionally excluded/)).toBeTruthy();
   expect(screen.getByText("Missing target")).toBeTruthy();
   expect(screen.getByText("Node builtin")).toBeTruthy();
+});
+
+test("layout failure preserves access to every analyzed file instead of crashing the review", () => {
+  vi.spyOn(dagre, "layout").mockImplementationOnce(() => {
+    throw new RangeError("Maximum call stack size exceeded");
+  });
+  const onSelect = vi.fn();
+  render(
+    createElement(Graph, { graph: snapshot.graph, direction: "LR", selected: null, onSelect }),
+  );
+  expect(screen.getByRole("alert").textContent).toContain("dependency map could not be displayed");
+  expect(screen.getAllByRole("option")).toHaveLength(4);
+  fireEvent.change(screen.getByLabelText("File to review"), { target: { value: "alone.ts" } });
+  expect(onSelect).toHaveBeenCalledWith("alone.ts");
 });

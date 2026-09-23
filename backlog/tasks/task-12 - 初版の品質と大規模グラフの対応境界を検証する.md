@@ -1,0 +1,28 @@
+---
+id: TASK-12
+title: 初版の品質と大規模グラフの対応境界を検証する
+status: In Progress
+assignee: []
+created_date: '2026-09-23 07:10'
+labels: []
+milestone: m-5
+dependencies:
+  - TASK-11
+documentation:
+  - docs/phase-5.md
+ordinal: 11000
+---
+
+## Acceptance Criteria
+
+<!-- AC:BEGIN -->
+- [x] #1 全入力モードの配布CLIとUI状態遷移の統合テストを補強する
+- [x] #2 合意した100/1,000ノードの性能目標と10,000ノードの限界を測定・記録する
+- [x] #3 配置失敗時も固定コードの閲覧を維持する
+- [x] #4 隔離配布検証と英語READMEの初版範囲を整える
+- [ ] #5 今回の変更に対する3 OS・2 Node版のCI成功を確認する
+<!-- AC:END -->
+
+## Implementation Notes
+
+全98テスト・型・lint・build・隔離配布がmacOSで成功。1,000ノード/3,000辺の初期描画781–826ms、操作43ms以下。10,000ノードは配置スタック上限。ファイル選択からコード閲覧を維持する。今回の変更は未pushのためCIは保留。詳細はdocs/phase-5.md。
