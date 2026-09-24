@@ -29,6 +29,8 @@ export interface FileChange {
   readonly binary: boolean;
   // null means unavailable, while an empty string is a valid empty text diff.
   readonly patch: string | null;
+  // Display-only patch generated with Git -w from the same captured states.
+  readonly whitespacePatch?: string | null;
 }
 
 export interface ReviewSummary {

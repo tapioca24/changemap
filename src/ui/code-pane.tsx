@@ -3,12 +3,22 @@ import type { MergedFileNode } from "../graph/model.js";
 import type { CapturedFile, ReviewSummary } from "../shared/review.js";
 import { request } from "./api.js";
 import { codeLanguage } from "./code-language.js";
-import { diffLines, sourceLines, type DiffLine } from "./code-lines.js";
+import { diffLines, sourceLines, splitDiffLines, type DiffLine } from "./code-lines.js";
 import { references, statusLabels } from "./graph.js";
 import { highlightFile } from "./highlight-client.js";
 import type { CodeToken, TokenLines } from "./highlight-engine.js";
 
 type Side = "before" | "after";
+
+export interface DiffDisplaySettings {
+  layout: "unified" | "split";
+  ignoreWhitespace: boolean;
+}
+
+export const defaultDiffDisplay: DiffDisplaySettings = {
+  layout: "unified",
+  ignoreWhitespace: false,
+};
 
 function useCodeSide(snapshotId: string, path: string | null, side: Side, load: boolean) {
   const key = JSON.stringify([snapshotId, path, side]);
@@ -85,7 +95,17 @@ function diffTokens(line: DiffLine, before?: TokenLines, after?: TokenLines) {
   return line.text;
 }
 
-export function CodePane({ snapshot, node }: { snapshot: ReviewSummary; node: MergedFileNode }) {
+export function CodePane({
+  snapshot,
+  node,
+  display = defaultDiffDisplay,
+  onDisplayChange,
+}: {
+  snapshot: ReviewSummary;
+  node: MergedFileNode;
+  display?: DiffDisplaySettings;
+  onDisplayChange?: (next: DiffDisplaySettings) => void;
+}) {
   const [mode, setMode] = useState<"diff" | "before" | "after">(
     node.status === "deleted" ? "before" : node.status === "unchanged" ? "after" : "diff",
   );
@@ -104,8 +124,22 @@ export function CodePane({ snapshot, node }: { snapshot: ReviewSummary; node: Me
   const selected = mode === "before" ? before : after;
   const current = selected.current;
   const binary = mode === "diff" ? node.change?.binary : current?.file?.encoding === "base64";
-  const text = mode === "diff" ? node.change?.patch : current?.file?.content;
+  const text =
+    mode === "diff"
+      ? display.ignoreWhitespace
+        ? (node.change?.whitespacePatch ?? node.change?.patch)
+        : node.change?.patch
+      : current?.file?.content;
   const lines = mode === "diff" ? diffLines(text ?? "") : sourceLines(text ?? "");
+  const noVisibleChanges =
+    mode === "diff" &&
+    display.ignoreWhitespace &&
+    diffLines(node.change?.patch ?? "").some(
+      (line) => line.kind === "add" || line.kind === "delete",
+    ) &&
+    !lines.some(
+      (line) => typeof line !== "string" && (line.kind === "add" || line.kind === "delete"),
+    );
   const highlightWarning =
     mode === "diff"
       ? (before.tokens?.error ??
@@ -124,6 +158,32 @@ export function CodePane({ snapshot, node }: { snapshot: ReviewSummary; node: Me
             Renamed from <code>{node.oldPath}</code>
           </p>
         )}
+      </div>
+      <div className="display-settings" role="group" aria-label="Display settings">
+        <span>DISPLAY</span>
+        <button
+          type="button"
+          aria-label="Split diff"
+          aria-pressed={display.layout === "split"}
+          onClick={() =>
+            onDisplayChange?.({
+              ...display,
+              layout: display.layout === "split" ? "unified" : "split",
+            })
+          }
+        >
+          {display.layout === "split" ? "Split" : "Unified"}
+        </button>
+        <label>
+          <input
+            type="checkbox"
+            checked={display.ignoreWhitespace}
+            onChange={(event) =>
+              onDisplayChange?.({ ...display, ignoreWhitespace: event.target.checked })
+            }
+          />
+          Ignore whitespace
+        </label>
       </div>
       <div className="code-tabs" role="group" aria-label="Content view">
         {node.change && (
@@ -180,6 +240,8 @@ export function CodePane({ snapshot, node }: { snapshot: ReviewSummary; node: Me
         <p role="status" className="pane-note">
           Loading captured contents…
         </p>
+      ) : noVisibleChanges ? (
+        <p className="pane-note">No differences after ignoring whitespace.</p>
       ) : text ? (
         <>
           {highlightWarning && (
@@ -188,32 +250,70 @@ export function CodePane({ snapshot, node }: { snapshot: ReviewSummary; node: Me
             </p>
           )}
           <pre
-            className={mode === "diff" ? "code code-diff" : "code"}
+            className={`code${mode === "diff" ? " code-diff" : ""}${mode === "diff" && display.layout === "split" ? " code-split" : ""}`}
             aria-label={mode === "diff" ? "File diff" : "Full file"}
             tabIndex={0}
           >
-            {lines.map((line, i) => (
-              <span
-                className={
-                  mode === "diff" ? `code-line line-${(line as DiffLine).kind}` : "code-line"
-                }
-                key={i}
-              >
-                <span className="line-number" aria-hidden="true">
-                  {mode === "diff" ? "" : i + 1}
-                </span>
-                {mode === "diff" &&
-                  ((line as DiffLine).kind === "add" || (line as DiffLine).kind === "delete") && (
-                    <span className="sr-only">
-                      {(line as DiffLine).kind === "add" ? "Added line: " : "Deleted line: "}
+            {mode === "diff" && display.layout === "split" ? (
+              <span className="split-grid">
+                {splitDiffLines(lines as DiffLine[]).map((row, i) =>
+                  row.kind === "separator" ? (
+                    <span className={`split-separator line-${row.line.kind}`} key={i}>
+                      {row.line.text}
+                    </span>
+                  ) : (
+                    <span className="split-row" key={i}>
+                      {([row.before, row.after] as const).map((side, index) => (
+                        <span
+                          className={`split-cell${side ? ` line-${side.kind}` : " split-empty"}`}
+                          key={index}
+                        >
+                          <span className="line-number" aria-hidden="true">
+                            {index === 0 ? side?.beforeLine : side?.afterLine}
+                          </span>
+                          {side?.kind === "delete" || side?.kind === "add" ? (
+                            <span className="sr-only">
+                              {side.kind === "add" ? "Added line: " : "Deleted line: "}
+                            </span>
+                          ) : null}
+                          {side
+                            ? diffTokens(side, before.tokens?.tokens, after.tokens?.tokens)
+                            : null}
+                        </span>
+                      ))}
+                    </span>
+                  ),
+                )}
+              </span>
+            ) : (
+              lines.map((line, i) => (
+                <span
+                  className={
+                    mode === "diff" ? `code-line line-${(line as DiffLine).kind}` : "code-line"
+                  }
+                  key={i}
+                >
+                  <span className="line-number" aria-hidden="true">
+                    {mode === "diff" ? (line as DiffLine).beforeLine : i + 1}
+                  </span>
+                  {mode === "diff" && (
+                    <span className="line-number" aria-hidden="true">
+                      {(line as DiffLine).afterLine}
                     </span>
                   )}
-                {mode === "diff"
-                  ? diffTokens(line as DiffLine, before.tokens?.tokens, after.tokens?.tokens)
-                  : codeTokens(line as string, selected.tokens?.tokens?.[i])}
-                {"\n"}
-              </span>
-            ))}
+                  {mode === "diff" &&
+                    ((line as DiffLine).kind === "add" || (line as DiffLine).kind === "delete") && (
+                      <span className="sr-only">
+                        {(line as DiffLine).kind === "add" ? "Added line: " : "Deleted line: "}
+                      </span>
+                    )}
+                  {mode === "diff"
+                    ? diffTokens(line as DiffLine, before.tokens?.tokens, after.tokens?.tokens)
+                    : codeTokens(line as string, selected.tokens?.tokens?.[i])}
+                  {"\n"}
+                </span>
+              ))
+            )}
           </pre>
         </>
       ) : (

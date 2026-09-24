@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { codeLanguage } from "../src/ui/code-language.js";
-import { diffLines, sourceLines } from "../src/ui/code-lines.js";
+import { diffLines, sourceLines, splitDiffLines } from "../src/ui/code-lines.js";
 import { highlightSource } from "../src/ui/highlight-engine.js";
 import {
   highlightFile,
@@ -43,6 +43,29 @@ test("diff lines map to both captured files without showing change markers as co
   ]);
   expect(sourceLines("one\n\n")).toEqual(["one", ""]);
   expect(sourceLines("one\r\ntwo\r\n")).toEqual(["one", "two"]);
+});
+
+test("split diff pairs unequal deletion and addition runs with correct line numbers", () => {
+  const lines = diffLines("@@ -3,3 +3,2 @@\n-old A\n-old B\n+new A\n context\n tail");
+  expect(splitDiffLines(lines)).toEqual([
+    { kind: "separator", line: { kind: "hunk", text: "@@ -3,3 +3,2 @@" } },
+    {
+      kind: "pair",
+      before: { kind: "delete", text: "old A", beforeLine: 3 },
+      after: { kind: "add", text: "new A", afterLine: 3 },
+    },
+    { kind: "pair", before: { kind: "delete", text: "old B", beforeLine: 4 } },
+    {
+      kind: "pair",
+      before: { kind: "context", text: "context", beforeLine: 5, afterLine: 4 },
+      after: { kind: "context", text: "context", beforeLine: 5, afterLine: 4 },
+    },
+    {
+      kind: "pair",
+      before: { kind: "context", text: "tail", beforeLine: 6, afterLine: 5 },
+      after: { kind: "context", text: "tail", beforeLine: 6, afterLine: 5 },
+    },
+  ]);
 });
 
 test("Shiki keeps multiline syntax state and emits reconstructable lines", async () => {

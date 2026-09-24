@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { createElement } from "react";
+import { createElement, useState } from "react";
 import { cleanup, fireEvent, render, screen, act } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { CodePane } from "../src/ui/code-pane.js";
+import { CodePane, defaultDiffDisplay } from "../src/ui/code-pane.js";
 import dagre from "@dagrejs/dagre";
 import { Graph } from "../src/ui/graph.js";
 import { layoutGraph } from "../src/ui/layout.js";
@@ -104,6 +104,41 @@ test("diff is default; switching sides cannot display an older asynchronous resp
   );
   expect(screen.getByLabelText("Full file").textContent).not.toContain("obsolete before");
   expect(fetcher.mock.calls[0][0]).toContain("snapshot=snapshot-1");
+});
+
+test("display controls switch split rows and whitespace patch while full files remain available", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ encoding: "utf8", content: "a very long captured line\n" })),
+    ),
+  );
+  const node = {
+    ...file("a.ts"),
+    change: {
+      ...file("a.ts").change!,
+      patch: "@@ -1 +1 @@\n-old\n+new",
+      whitespacePatch: "",
+    },
+  };
+  function Example() {
+    const [display, setDisplay] = useState(defaultDiffDisplay);
+    return createElement(CodePane, { snapshot, node, display, onDisplayChange: setDisplay });
+  }
+  render(createElement(Example));
+  fireEvent.click(screen.getByRole("button", { name: "Split diff" }));
+  const diff = screen.getByLabelText("File diff");
+  expect(diff.querySelectorAll(".split-row")).toHaveLength(1);
+  expect(diff.querySelector(".line-delete")?.textContent).toContain("old");
+  expect(diff.querySelector(".line-add")?.textContent).toContain("new");
+  fireEvent.click(screen.getByLabelText("Ignore whitespace"));
+  expect(screen.getByText("No differences after ignoring whitespace.")).toBeTruthy();
+  fireEvent.click(screen.getByText("After · full file"));
+  expect((await screen.findByLabelText("Full file")).textContent).toContain(
+    "a very long captured line",
+  );
+  expect(screen.queryByLabelText("Wrap lines")).toBeNull();
 });
 test("deleted files start with old contents, and binary files explain unavailable text", async () => {
   vi.stubGlobal(
