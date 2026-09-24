@@ -3,7 +3,7 @@ id: doc-1
 title: usage
 type: guide
 created_date: '2026-09-23 15:07'
-updated_date: '2026-09-23 15:13'
+updated_date: '2026-09-24 15:54'
 ---
 # Usage guide
 
@@ -96,6 +96,15 @@ Select a file in the change map to read its diff or captured before/after conten
 Deleted files initially show their old full contents; unchanged neighbors show
 full contents. Renames retain both paths. Binary files show a text-unavailable
 message. Files outside dependency analysis appear in a separate area.
+
+Text diffs and full files use syntax colors for TypeScript, JavaScript, JSON, CSS,
+HTML, Markdown, Python, Go, Rust, Java, C/C++, C#, Ruby, PHP, shell scripts,
+SQL, YAML, TOML, XML, and Dockerfiles. File extensions and common filenames
+select the language; unknown languages remain plain text. Added and deleted
+diff lines have distinct backgrounds, without `+` or `-` code prefixes. The
+code appears immediately while highlighting loads. Files over 300,000 characters
+or 5,000 lines, and files whose highlighting fails, remain readable without
+syntax colors and show a short reason.
 
 The graph uses Dagre layout with left-to-right, top-to-bottom, right-to-left, and
 bottom-to-top orientations. Arrows always point from the referencing file to its

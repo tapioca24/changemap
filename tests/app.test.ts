@@ -34,6 +34,9 @@ vi.mock("../src/ui/graph.js", async (original) => ({
         ),
     ),
 }));
+vi.mock("../src/ui/highlight-client.js", () => ({ highlightFile: vi.fn(async () => []) }));
+
+const addedCode = () => screen.getByLabelText("File diff").querySelector(".line-add")?.textContent;
 
 function snapshot(id: string, path?: string): ReviewSummary {
   const change = {
@@ -148,10 +151,10 @@ test("stale notification and failed refresh preserve selected graph and code; su
   const state = api(snapshot("old-snapshot", "old.ts"));
   render(createElement(App));
   fireEvent.click(await screen.findByText("Open old.ts"));
-  expect(screen.getByLabelText("File diff").textContent).toContain("+old-snapshot");
+  expect(addedCode()).toContain("old-snapshot");
   state.status = { ...state.status, stale: true };
   expect(await screen.findByText(/New changes are available/, {}, { timeout: 3000 })).toBeTruthy();
-  expect(screen.getByLabelText("File diff").textContent).toContain("+old-snapshot");
+  expect(addedCode()).toContain("old-snapshot");
   state.failure = true;
   fireEvent.click(screen.getByRole("button", { name: /Refresh comparison/ }));
   expect(await screen.findByRole("alert")).toHaveProperty(
@@ -159,7 +162,7 @@ test("stale notification and failed refresh preserve selected graph and code; su
     expect.stringContaining("Comparison ref missing"),
   );
   expect(screen.getByText("Open old.ts")).toBeTruthy();
-  expect(screen.getByLabelText("File diff").textContent).toContain("+old-snapshot");
+  expect(addedCode()).toContain("old-snapshot");
   state.failure = false;
   state.next = snapshot("new-snapshot", "new.ts");
   fireEvent.click(screen.getByRole("button", { name: /Retry refresh/ }));
@@ -167,7 +170,7 @@ test("stale notification and failed refresh preserve selected graph and code; su
   expect(screen.queryByText("Open old.ts")).toBeNull();
   expect(screen.queryByLabelText("Code pane")).toBeNull();
   fireEvent.click(screen.getByText("Open new.ts"));
-  expect(screen.getByLabelText("File diff").textContent).toContain("+new-snapshot");
+  expect(addedCode()).toContain("new-snapshot");
 });
 
 test("empty review transitions on explicit refresh; incomplete analysis outside visible files is announced", async () => {
@@ -202,7 +205,7 @@ test("theme and direction remain applied after failed saves and review continues
   expect(state.saved).toHaveLength(8);
   expect(state.saved.at(-1)).toEqual({ theme: "mocha", orientation: "LR" });
   fireEvent.click(screen.getByText("Open file.ts"));
-  expect(screen.getByLabelText("File diff").textContent).toContain("+one");
+  expect(addedCode()).toContain("one");
 });
 
 test("selection survives refresh with updated code, then closes when the file disappears", async () => {
@@ -212,7 +215,7 @@ test("selection survives refresh with updated code, then closes when the file di
   const graph = screen.getByLabelText("Test graph");
   state.next = snapshot("two", "file.ts");
   fireEvent.click(screen.getByRole("button", { name: /Refresh comparison/ }));
-  await waitFor(() => expect(screen.getByLabelText("File diff").textContent).toContain("+two"));
+  await waitFor(() => expect(addedCode()).toContain("two"));
   expect(screen.getByLabelText("Test graph")).toBe(graph);
   state.next = snapshot("three");
   fireEvent.click(screen.getByRole("button", { name: /Refresh comparison/ }));
