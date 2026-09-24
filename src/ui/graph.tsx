@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo, useEffect } from "react";
 import {
   ReactFlow,
   Background,
@@ -7,12 +7,15 @@ import {
   Position,
   MarkerType,
   BaseEdge,
+  useReactFlow,
+  useStore,
   type EdgeProps,
   type Edge,
   type NodeProps,
   type Node,
 } from "@xyflow/react";
 import { layoutElements } from "./layout.js";
+import { revealNode } from "./viewport.js";
 import type { MergedFileNode, ReviewGraph } from "../graph/model.js";
 import type { Settings } from "../shared/settings.js";
 import "@xyflow/react/dist/style.css";
@@ -96,16 +99,60 @@ function DependencyEdge({
   );
 }
 const edgeTypes = { dependency: DependencyEdge };
+
+function RevealSelection({
+  node,
+  resizing,
+  suspended,
+}: {
+  node: { position: { x: number; y: number }; width: number; height: number } | undefined;
+  resizing: boolean;
+  suspended: boolean;
+}) {
+  const flow = useReactFlow();
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
+  useEffect(() => {
+    if (!flow.viewportInitialized) return;
+    if (resizing || suspended) {
+      // Stop an in-flight reveal before a new drag or a switch to the narrow code view.
+      void flow.setViewport(flow.getViewport(), { duration: 0 });
+      return;
+    }
+    if (!node || !width || !height) return;
+    const frame = requestAnimationFrame(() => {
+      const current = flow.getViewport();
+      const next = revealNode(
+        current,
+        { ...node.position, width: node.width, height: node.height },
+        { width, height },
+      );
+      if (next.x !== current.x || next.y !== current.y) {
+        void flow.setViewport(next, {
+          interpolate: "linear",
+          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 240,
+        });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [node, resizing, suspended, width, height, flow]);
+  return null;
+}
+
 export const Graph = memo(function Graph({
   graph,
   direction,
   selected,
   onSelect,
+  resizing = false,
+  suspended = false,
 }: {
   graph: ReviewGraph;
   direction: Settings["orientation"];
   selected: string | null;
   onSelect(id: string): void;
+  resizing?: boolean;
+  suspended?: boolean;
 }) {
   const { nodes, routes, failed } = useMemo(() => {
     try {
@@ -199,6 +246,11 @@ export const Graph = memo(function Graph({
         minZoom={0.08}
         maxZoom={2}
       >
+        <RevealSelection
+          node={nodes.find((node) => node.id === selected)}
+          resizing={resizing}
+          suspended={suspended}
+        />
         <Background color="var(--surface1)" gap={22} />
         <Controls showInteractive={false} />
       </ReactFlow>
