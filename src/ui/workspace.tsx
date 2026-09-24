@@ -9,11 +9,19 @@ import {
 import type { ReviewSummary } from "../shared/review.js";
 import type { Settings } from "../shared/settings.js";
 import { Graph, statusLabels } from "./graph.js";
-import { CodePane } from "./code-pane.js";
+import { CodePane, defaultDiffDisplay, type DiffDisplaySettings } from "./code-pane.js";
 
 const storageKey = "changemap.workspace";
+const maxCodePanePixels = 1440;
+const maxCodePanePercentage = 55;
 // A cookie survives the CLI's ephemeral ports; store only these non-sensitive preferences.
-function loadPreferences(): { width: number; listOpen: boolean } {
+interface WorkspacePreferences {
+  width: number;
+  listOpen: boolean;
+  display: DiffDisplaySettings;
+}
+
+function loadPreferences(): WorkspacePreferences {
   try {
     const value = JSON.parse(
       decodeURIComponent(
@@ -26,12 +34,19 @@ function loadPreferences(): { width: number; listOpen: boolean } {
     return {
       width:
         typeof value?.width === "number" && Number.isFinite(value.width)
-          ? Math.min(50, Math.max(0, value.width))
+          ? Math.min(maxCodePanePercentage, Math.max(0, value.width))
           : 30,
       listOpen: typeof value?.listOpen === "boolean" ? value.listOpen : true,
+      display: {
+        layout: value?.display?.layout === "split" ? "split" : "unified",
+        ignoreWhitespace:
+          typeof value?.display?.ignoreWhitespace === "boolean"
+            ? value.display.ignoreWhitespace
+            : defaultDiffDisplay.ignoreWhitespace,
+      },
     };
   } catch {
-    return { width: 30, listOpen: true };
+    return { width: 30, listOpen: true, display: defaultDiffDisplay };
   }
 }
 
@@ -58,8 +73,11 @@ export function Workspace({
   const node = snapshot.graph.merged.nodes.find((file) => file.id === selected);
   const open = paneOpen && !!node;
   const narrow = width > 0 && width < 960;
-  const minimum = width ? Math.min(50, (320 / width) * 100) : 0;
-  const paneWidth = Math.max(minimum, preferences.width);
+  const maximum = width
+    ? Math.min(maxCodePanePercentage, (maxCodePanePixels / width) * 100)
+    : maxCodePanePercentage;
+  const minimum = width ? Math.min(maximum, (320 / width) * 100) : 0;
+  const paneWidth = Math.min(maximum, Math.max(minimum, preferences.width));
   const outside = snapshot.graph.merged.nodes.filter(
     (file) => !file.analyzed.before && !file.analyzed.after,
   );
@@ -95,7 +113,10 @@ export function Workspace({
     requestAnimationFrame(() => returnFocus.current?.isConnected && returnFocus.current.focus());
   }
   function resize(next: number) {
-    setPreferences((current) => ({ ...current, width: Math.min(50, Math.max(minimum, next)) }));
+    setPreferences((current) => ({
+      ...current,
+      width: Math.min(maximum, Math.max(minimum, next)),
+    }));
   }
   return (
     <div
@@ -174,9 +195,9 @@ export function Workspace({
             role="separator"
             aria-label="Resize code pane"
             aria-orientation="vertical"
-            aria-valuemin={Math.round(minimum)}
-            aria-valuemax={50}
-            aria-valuenow={Math.round(paneWidth)}
+            aria-valuemin={minimum}
+            aria-valuemax={maximum}
+            aria-valuenow={paneWidth}
             aria-controls="code-panel"
             tabIndex={0}
             onPointerDown={(event) => {
@@ -202,7 +223,7 @@ export function Workspace({
                 ArrowLeft: paneWidth + 2,
                 ArrowRight: paneWidth - 2,
                 Home: minimum,
-                End: 50,
+                End: maximum,
               }[event.key];
               if (next !== undefined) {
                 event.preventDefault();
@@ -217,7 +238,13 @@ export function Workspace({
                 {narrow ? "← Back to graph" : "Close code pane ×"}
               </button>
             </div>
-            <CodePane key={node.id} snapshot={snapshot} node={node} />
+            <CodePane
+              key={node.id}
+              snapshot={snapshot}
+              node={node}
+              display={preferences.display}
+              onDisplayChange={(display) => setPreferences((current) => ({ ...current, display }))}
+            />
           </div>
         </>
       )}

@@ -135,6 +135,7 @@ export class SnapshotSource {
               newMode: file.mode,
               binary: file.encoding === "base64",
               patch: file.encoding === "base64" ? null : "",
+              whitespacePatch: file.encoding === "base64" ? null : "",
             }),
           );
         const describe = ({ kind, label, commit }: CapturedState): StateDescription =>

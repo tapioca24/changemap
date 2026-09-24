@@ -5,6 +5,34 @@ export type DiffLine = {
   afterLine?: number;
 };
 
+export type SplitDiffRow =
+  | { kind: "pair"; before?: DiffLine; after?: DiffLine }
+  | { kind: "separator"; line: DiffLine };
+
+export function splitDiffLines(lines: readonly DiffLine[]): SplitDiffRow[] {
+  const rows: SplitDiffRow[] = [];
+  let deleted: DiffLine[] = [];
+  let added: DiffLine[] = [];
+  const flush = () => {
+    for (let i = 0; i < Math.max(deleted.length, added.length); i++) {
+      rows.push({ kind: "pair", before: deleted[i], after: added[i] });
+    }
+    deleted = [];
+    added = [];
+  };
+  for (const line of lines) {
+    if (line.kind === "delete") deleted.push(line);
+    else if (line.kind === "add") added.push(line);
+    else {
+      flush();
+      if (line.kind === "context") rows.push({ kind: "pair", before: line, after: line });
+      else rows.push({ kind: "separator", line });
+    }
+  }
+  flush();
+  return rows;
+}
+
 export function sourceLines(content: string): string[] {
   if (!content) return [];
   const lines = content.split("\n");

@@ -229,21 +229,54 @@ test("pane starts closed, supports keyboard resize, remembers width and returns 
   const file = await screen.findByText("Open file.ts");
   expect(screen.queryByLabelText("Code pane")).toBeNull();
   fireEvent.click(file);
+  fireEvent.click(screen.getByRole("button", { name: "Split diff" }));
+  expect(screen.queryByLabelText("Wrap lines")).toBeNull();
+  expect(document.cookie).toContain("changemap.workspace=");
   const separator = screen.getByRole("separator");
   expect(separator.getAttribute("aria-valuenow")).toBe("30");
   fireEvent.keyDown(separator, { key: "End" });
-  expect(separator.getAttribute("aria-valuenow")).toBe("50");
+  expect(separator.getAttribute("aria-valuenow")).toBe("55");
   fireEvent.keyDown(separator, { key: "ArrowLeft" });
-  expect(separator.getAttribute("aria-valuenow")).toBe("50");
+  expect(separator.getAttribute("aria-valuenow")).toBe("55");
   fireEvent.click(screen.getByRole("button", { name: /Close code pane/ }));
   expect(screen.queryByLabelText("Code pane")).toBeNull();
   expect(screen.getByText("Open file.ts")).toBe(file);
   fireEvent.click(screen.getByText("Open selected file"));
-  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("50");
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("55");
   view.unmount();
   render(createElement(App));
   fireEvent.click(await screen.findByText("Open file.ts"));
-  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("50");
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("55");
+  expect(screen.getByRole("button", { name: "Split diff" }).getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+  expect(screen.queryByLabelText("Wrap lines")).toBeNull();
+});
+
+test("wide screens cap the code pane at 1440px without discarding a saved 55% preference", async () => {
+  measuredWidth = 3200;
+  document.cookie = `changemap.workspace=${encodeURIComponent(JSON.stringify({ width: 55, listOpen: true }))}; Path=/`;
+  api(snapshot("one", "file.ts"));
+  render(createElement(App));
+  fireEvent.click(await screen.findByText("Open file.ts"));
+  const separator = screen.getByRole("separator");
+  const workspace = screen.getByLabelText("Change map").parentElement!;
+  expect(separator.getAttribute("aria-valuemax")).toBe("45");
+  expect(separator.getAttribute("aria-valuenow")).toBe("45");
+  expect(workspace.style.getPropertyValue("--pane-width")).toBe("45%");
+  act(() => {
+    measuredWidth = 2560;
+    resizeWorkspace();
+  });
+  expect(separator.getAttribute("aria-valuemax")).toBe("55");
+  expect(separator.getAttribute("aria-valuenow")).toBe("55");
+  expect(workspace.style.getPropertyValue("--pane-width")).toBe("55%");
+  act(() => {
+    measuredWidth = 3200;
+    resizeWorkspace();
+  });
+  fireEvent.keyDown(separator, { key: "End" });
+  expect(separator.getAttribute("aria-valuenow")).toBe("45");
 });
 
 test("narrow screen returns to the graph without losing selection or remounting it", async () => {

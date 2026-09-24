@@ -91,6 +91,11 @@ export async function diffStates(
       const patch = binary
         ? null
         : (await run([...common, "--patch", "before", "after", "--", ...paths])).toString("utf8");
+      const whitespacePatch = binary
+        ? null
+        : (await run([...common, "--patch", "-w", "before", "after", "--", ...paths])).toString(
+            "utf8",
+          );
       changes.push(
         Object.freeze({
           status,
@@ -100,6 +105,7 @@ export async function diffStates(
           newMode: newMode === "000000" ? null : newMode,
           binary,
           patch,
+          whitespacePatch,
         }),
       );
     }

@@ -256,8 +256,9 @@ p {
 }
 .code-line {
   display: block;
-  min-width: max-content;
-  white-space: pre;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   padding-right: 18px;
 }
 .sr-only {
@@ -280,11 +281,56 @@ p {
   margin-right: 16px;
   color: var(--overlay1);
 }
-.code-diff .line-number {
-  display: none;
-}
 .code-diff .code-line {
   padding-left: 16px;
+}
+.display-settings {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 0 16px 12px;
+  font-size: 11px;
+}
+.display-settings > span {
+  color: var(--subtext0);
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.display-settings button {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+.display-settings label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.code-split .split-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+}
+.code-split .split-row {
+  display: contents;
+}
+.code-split .split-cell {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 0 12px;
+  border-right: 1px solid var(--surface0);
+}
+.code-split .split-empty {
+  background: var(--mantle);
+}
+.code-split .split-separator {
+  display: block;
+  grid-column: 1 / -1;
+  padding: 0 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .line-add {
   background: color-mix(in srgb, var(--green) 10%, transparent);

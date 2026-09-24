@@ -8,6 +8,25 @@ import { repository } from "./helpers/repository.js";
 
 const source = (root: string, ...args: string[]) => new SnapshotSource(root, parseInput(args));
 
+test("whitespace display patch ignores spacing without changing captured status or normal patch", async () => {
+  const repo = await repository();
+  await repo.write("file.ts", "const value = 1;\nconst kept = 2;\n");
+  await repo.commit();
+  await repo.write("file.ts", "const  value = 1;\nconst kept = 3;\n");
+  const snapshot = await source(repo.root, ".").capture();
+  const change = snapshot.summary.changes[0];
+  expect(change.status).toBe("modified");
+  expect(change.patch).toContain("-const value = 1;");
+  expect(change.whitespacePatch).not.toContain("-const value = 1;");
+  expect(change.whitespacePatch).toContain("-const kept = 2;");
+  expect(change.whitespacePatch).toContain("+const kept = 3;");
+  await repo.write("file.ts", "const  value = 1;\nconst kept = 2;\n");
+  const whitespaceOnly = (await source(repo.root, ".").capture()).summary.changes[0];
+  expect(whitespaceOnly.status).toBe("modified");
+  expect(whitespaceOnly.patch).toContain("+const  value = 1;");
+  expect(whitespaceOnly.whitespacePatch).toBe("");
+});
+
 test("root commit, default, @, and a single branch compare against the empty state", async () => {
   const repo = await repository();
   await repo.write("hello.ts", "export const hello = true;\n");
