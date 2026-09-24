@@ -4,12 +4,12 @@ title: フェーズ2の配布検証と実装記録を整える
 status: Done
 assignee: []
 created_date: '2026-09-19 08:47'
-updated_date: '2026-09-19 08:52'
+updated_date: '2026-09-24 03:51'
 labels: []
 milestone: m-2
 dependencies: []
 documentation:
-  - docs/phase-2.md
+  - backlog/docs/doc-3 - analysis-performance.md
 ordinal: 9000
 ---
 

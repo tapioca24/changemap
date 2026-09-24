@@ -117,9 +117,10 @@ The 10,000-node layered case is a known layout limit and is expected to fail.
 CI runs the layout check without timing thresholds; browser timings are a separate
 local measurement.
 
-[Phase 2](docs/phase-2.md) and [Phase 5](docs/phase-5.md) retain historical
-measurement context; [Phase 5 results](docs/phase-5-measurements.json) contain raw
-rendering results. These synthetic results are not performance guarantees.
+[Analysis measurements](<backlog/docs/doc-3 - analysis-performance.md>) and
+[rendering measurements](<backlog/docs/doc-4 - rendering-performance.md>) retain
+measurement conditions, reproduction details, and limits. The rendering document
+also preserves the raw results in a JSON block. These synthetic results are not performance guarantees.
 Repository analysis size and displayed graph size measure different workloads.
 Browser timings exclude Git capture and analysis, and Node RSS excludes browser
 memory. Do not present historical results as measurements of a new change.
@@ -128,6 +129,10 @@ memory. Do not present historical results as measurements of a new change.
 
 The [README](README.md) covers first use. Detailed user behavior lives in the
 [usage guide](<backlog/docs/doc-1 - usage.md>); keep it aligned with implementation.
+Design rationale lives in [architecture](<backlog/docs/doc-2 - architecture.md>).
+Ongoing work belongs in Backlog tasks; uncommitted ideas belong in drafts.
+The former MVP documents were consolidated under `backlog/docs/`; TASK-16 records
+the old-to-new mapping, including historical references in completed milestones.
 The README screenshot is a real capture of a small TypeScript checkout example,
 stored at `.github/assets/changemap.png`.
 

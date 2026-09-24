@@ -4,12 +4,13 @@ title: 初版の品質と大規模グラフの対応境界を検証する
 status: Done
 assignee: []
 created_date: '2026-09-23 07:10'
+updated_date: '2026-09-24 03:51'
 labels: []
 milestone: m-5
 dependencies:
   - TASK-11
 documentation:
-  - docs/phase-5.md
+  - backlog/docs/doc-4 - rendering-performance.md
 ordinal: 11000
 ---
 
@@ -25,4 +26,6 @@ ordinal: 11000
 
 ## Implementation Notes
 
-全98テスト・型・lint・build・隔離配布がmacOSで成功。1,000ノード/3,000辺の初期描画781–826ms、操作43ms以下。10,000ノードは配置スタック上限。ファイル選択からコード閲覧を維持する。実装コミット `4d09593` をpush済み。[CI run 35848465588](https://github.com/tapioca24/changemap/actions/runs/35848465588)でLinux/macOS/Windows × Node.js 24.11.0/24.xの全6ジョブ成功を2026-09-23に確認。詳細はdocs/phase-5.md。
+<!-- SECTION:NOTES:BEGIN -->
+全98テスト・型・lint・build・隔離配布がmacOSで成功。1,000ノード/3,000辺の初期描画781–826ms、操作43ms以下。10,000ノードは配置スタック上限。ファイル選択からコード閲覧を維持する。実装コミット `4d09593` をpush済み。[CI run 35848465588](https://github.com/tapioca24/changemap/actions/runs/35848465588)でLinux/macOS/Windows × Node.js 24.11.0/24.xの全6ジョブ成功を2026-09-23に確認。詳細は[当時の資料](https://github.com/tapioca24/changemap/blob/b9cb948563aba5bbcbb180692e20ca0b67e4c571/docs/phase-5.md)。
+<!-- SECTION:NOTES:END -->

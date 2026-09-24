@@ -4,7 +4,7 @@ title: フェーズ0〜5のPRをレビューし依存順にマージする
 status: Done
 assignee: []
 created_date: '2026-09-23 14:06'
-updated_date: '2026-09-23 14:08'
+updated_date: '2026-09-24 03:51'
 labels: []
 dependencies: []
 references:
@@ -15,14 +15,14 @@ references:
   - 'https://github.com/tapioca24/changemap/pull/5'
   - 'https://github.com/tapioca24/changemap/pull/6'
 documentation:
-  - docs/phase-5.md
+  - backlog/docs/doc-4 - rendering-performance.md
 ordinal: 12000
 ---
 
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-docs/handoff.md の古い残作業記録から移管したが、ユーザーの指摘とGitHub照会により登録前に完了していたことを確認した。フェーズ0〜5のPR #1〜#6は2026-09-23に順番にマージ済み。完了履歴として保持する。
+[当時の資料](https://github.com/tapioca24/changemap/blob/b9cb948563aba5bbcbb180692e20ca0b67e4c571/docs/handoff.md) の古い残作業記録から移管したが、ユーザーの指摘とGitHub照会により登録前に完了していたことを確認した。フェーズ0〜5のPR #1〜#6は2026-09-23に順番にマージ済み。完了履歴として保持する。
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

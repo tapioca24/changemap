@@ -4,12 +4,12 @@ title: グラフとコードのレビューUI、テーマ設定を実装する
 status: Done
 assignee: []
 created_date: '2026-09-23 05:41'
-updated_date: '2026-09-23 06:03'
+updated_date: '2026-09-24 03:52'
 labels: []
 milestone: m-4
 dependencies: []
 documentation:
-  - docs/phase-4.md
+  - backlog/docs/doc-2 - architecture.md
 ordinal: 10000
 ---
 
@@ -23,5 +23,5 @@ ordinal: 10000
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-React FlowとDagreの統合グラフ、コードペイン、4テーマ、設定保存を実装。macOSで87テスト・型・lint・整形・build・隔離配布検証が成功。ブラウザで更新・失敗保持・設定破損・狭幅を検証。CIと他OSは未実行。docs/phase-4.md参照。
+React FlowとDagreの統合グラフ、コードペイン、4テーマ、設定保存を実装。macOSで87テスト・型・lint・整形・build・隔離配布検証が成功。ブラウザで更新・失敗保持・設定破損・狭幅を検証。CIと他OSは未実行。[当時の資料](https://github.com/tapioca24/changemap/blob/b9cb948563aba5bbcbb180692e20ca0b67e4c571/docs/phase-4.md)参照。
 <!-- SECTION:FINAL_SUMMARY:END -->
