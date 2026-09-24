@@ -33,7 +33,7 @@ TypeScript の strict モードと ESM を使用します。既存コードに�
 `tests/**/*.test.ts` を Vitest で実行します。通常は Node 環境、React の振る舞いは jsdom と Testing Library で検証します。
 対象を絞る場合は、ビルド後に `pnpm exec vitest run tests/graph.test.ts` を実行してください。
 数値のカバレッジ閾値は未設定です。振る舞いの変更には回帰テストを追加し、Git 操作には一時リポジトリのヘルパーを利用します。
-CI は Linux・macOS・Windows と Node.js の最小対応版・最新 24.x を検証します。
+CI は Linux・macOS・Windows で Node.js 24.11.0 を検証します。
 
 ## コミット・Pull Request
 

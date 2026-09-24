@@ -59,7 +59,7 @@ uses jsdom and Testing Library. Use temporary repositories for Git operations.
 
 Before submitting, run typecheck, lint, format:check, test, benchmark:layout, and
 test:pack. Report failures and any checks you could not run. CI checks Linux,
-macOS, and Windows with Node.js 24.11.0 and the latest 24.x patch.
+macOS, and Windows with Node.js 24.11.0.
 
 ## Packaging and license
 
