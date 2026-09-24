@@ -9,8 +9,7 @@ import {
   type SettingsState,
 } from "../shared/settings.js";
 import { request } from "./api.js";
-import { Graph, statusLabels } from "./graph.js";
-import { CodePane } from "./code-pane.js";
+import { Workspace } from "./workspace.js";
 import "./style.css";
 
 export function App() {
@@ -91,7 +90,16 @@ export function App() {
     try {
       const next = await request<ReviewSummary>("/api/refresh", "POST");
       setSnapshot(next);
-      setSelected(null);
+      setSelected((current) => {
+        const previous = snapshot?.graph.merged.nodes.find((file) => file.id === current);
+        if (!previous) return null;
+        const match = next.graph.merged.nodes.find(
+          (file) =>
+            (previous.oldPath !== null && file.oldPath === previous.oldPath) ||
+            (previous.newPath !== null && file.newPath === previous.newPath),
+        );
+        return match?.id ?? null;
+      });
       setStatus({ snapshotId: next.id, stale: false, refreshing: false, error: null });
       setError(null);
       setConnectionError(null);
@@ -103,7 +111,16 @@ export function App() {
   }
   const stale = status?.stale || (snapshot && status && snapshot.id !== status.snapshotId);
   const notice = error ?? status?.error ?? connectionError;
-  const node = snapshot?.graph.merged.nodes.find((n) => n.id === selected);
+  const refreshButton = (
+    <button
+      className="refresh"
+      disabled={busy || status?.refreshing}
+      onClick={() => void refresh()}
+    >
+      {busy || status?.refreshing ? "Capturing…" : notice ? "Retry refresh" : "Refresh comparison"}{" "}
+      ↻
+    </button>
+  );
   const palette = flavors[settings.theme];
   const style = Object.fromEntries(
     palette.colorEntries.map(([name, color]) => [`--${name}`, color.hex]),
@@ -164,21 +181,6 @@ export function App() {
         </div>
       </header>
       <main>
-        <div className="review-heading">
-          <div>
-            <p className="eyebrow">
-              {snapshot?.repository.split(/[/\\]/).pop() ?? "YOUR REPOSITORY"}
-            </p>
-            <h1>Follow the change.</h1>
-          </div>
-          <button
-            className="refresh"
-            disabled={busy || status?.refreshing}
-            onClick={() => void refresh()}
-          >
-            {busy ? "Capturing…" : notice ? "Retry refresh" : "Refresh comparison"} ↻
-          </button>
-        </div>
         {settingsWarning && (
           <div className="notice" role="status">
             {settingsWarning}
@@ -199,6 +201,9 @@ export function App() {
         {snapshot ? (
           <>
             <section className="comparison" aria-label="Comparison targets">
+              <strong className="repository-name" title={snapshot.repository}>
+                {snapshot.repository.split(/[/\\]/).pop()}
+              </strong>
               <div>
                 <small>BEFORE</small>
                 <strong>{snapshot.before.label}</strong>
@@ -219,7 +224,7 @@ export function App() {
               </div>
             </section>
             {snapshot.graph.incomplete && (
-              <details className="notice analysis" open>
+              <details className="notice analysis">
                 <summary>Dependency analysis is incomplete. Direct users may be missing.</summary>
                 <p>
                   Resolved dependencies and code remain available. Unresolved references may exist
@@ -237,61 +242,16 @@ export function App() {
               </details>
             )}
             {snapshot.changes.length ? (
-              <div className="workspace" key={snapshot.id}>
-                <section className="map-pane" aria-label="Change map">
-                  <div className="map-heading">
-                    <h2>Change map</h2>
-                    <span>Reference source → target</span>
-                  </div>
-                  <div className="legend" aria-label="Graph legend">
-                    {Object.entries(statusLabels).map(([status, label]) => (
-                      <span className={`status ${status}`} key={status}>
-                        {label}
-                      </span>
-                    ))}
-                    <small>Edges: + added · − dashed deleted · solid unchanged</small>
-                  </div>
-                  <Graph
-                    graph={snapshot.graph}
-                    direction={settings.orientation}
-                    selected={selected}
-                    onSelect={setSelected}
-                  />
-                  <section className="unanalyzed" aria-label="Unanalyzed changed files">
-                    <h3>Outside dependency analysis</h3>
-                    <div>
-                      {snapshot.graph.merged.nodes
-                        .filter((n) => !n.analyzed.before && !n.analyzed.after)
-                        .map((n) => (
-                          <button
-                            className={`unanalyzed-node ${n.status}`}
-                            key={n.id}
-                            aria-pressed={selected === n.id}
-                            onClick={() => setSelected(n.id)}
-                          >
-                            <span>{statusLabels[n.status]}</span>
-                            <strong>{n.newPath ?? n.oldPath}</strong>
-                            {n.change?.binary && <small>Binary</small>}
-                          </button>
-                        ))}
-                    </div>
-                    <p>
-                      These files are not analyzed; this does not mean they have no dependencies.
-                    </p>
-                  </section>
-                </section>
-                {node ? (
-                  <CodePane key={node.id} snapshot={snapshot} node={node} />
-                ) : (
-                  <aside className="code-pane empty-pane">
-                    <span>↖</span>
-                    <h2>Select a file</h2>
-                    <p>Follow a dependency or choose a changed file to read its captured code.</p>
-                  </aside>
-                )}
-              </div>
+              <Workspace
+                snapshot={snapshot}
+                direction={settings.orientation}
+                selected={selected}
+                onSelect={setSelected}
+                refresh={refreshButton}
+              />
             ) : (
               <section className="empty">
+                {refreshButton}
                 <span>✓</span>
                 <h2>No changes</h2>
                 <p>These two states match. New changes appear after you refresh.</p>
@@ -303,9 +263,12 @@ export function App() {
             </footer>
           </>
         ) : (
-          <p role="status">
-            {notice ? "Use Retry refresh to load the comparison." : "Loading your comparison…"}
-          </p>
+          <div className="loading-comparison">
+            {refreshButton}
+            <p role="status">
+              {notice ? "Use Retry refresh to load the comparison." : "Loading your comparison…"}
+            </p>
+          </div>
         )}
       </main>
     </div>

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createElement } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, act } from "@testing-library/react";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { App } from "../src/ui/app.js";
 import type { ReviewSummary, ReviewStatus } from "../src/shared/review.js";
 import type { Settings } from "../src/shared/settings.js";
@@ -120,9 +120,27 @@ function api(initial: ReviewSummary) {
   );
   return state;
 }
+let measuredWidth = 1440;
+let resizeWorkspace: () => void;
+beforeEach(() => {
+  measuredWidth = 1440;
+  document.cookie = "changemap.workspace=; Max-Age=0; Path=/";
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => measuredWidth);
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: () => void) {
+        resizeWorkspace = callback;
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
+});
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -185,4 +203,89 @@ test("theme and direction remain applied after failed saves and review continues
   expect(state.saved.at(-1)).toEqual({ theme: "mocha", orientation: "LR" });
   fireEvent.click(screen.getByText("Open file.ts"));
   expect(screen.getByLabelText("File diff").textContent).toContain("+one");
+});
+
+test("selection survives refresh with updated code, then closes when the file disappears", async () => {
+  const state = api(snapshot("one", "file.ts"));
+  render(createElement(App));
+  fireEvent.click(await screen.findByText("Open file.ts"));
+  const graph = screen.getByLabelText("Test graph");
+  state.next = snapshot("two", "file.ts");
+  fireEvent.click(screen.getByRole("button", { name: /Refresh comparison/ }));
+  await waitFor(() => expect(screen.getByLabelText("File diff").textContent).toContain("+two"));
+  expect(screen.getByLabelText("Test graph")).toBe(graph);
+  state.next = snapshot("three");
+  fireEvent.click(screen.getByRole("button", { name: /Refresh comparison/ }));
+  await screen.findByText("No changes");
+  expect(screen.queryByLabelText("Code pane")).toBeNull();
+});
+
+test("pane starts closed, supports keyboard resize, remembers width and returns to the same graph", async () => {
+  api(snapshot("one", "file.ts"));
+  const view = render(createElement(App));
+  const file = await screen.findByText("Open file.ts");
+  expect(screen.queryByLabelText("Code pane")).toBeNull();
+  fireEvent.click(file);
+  const separator = screen.getByRole("separator");
+  expect(separator.getAttribute("aria-valuenow")).toBe("30");
+  fireEvent.keyDown(separator, { key: "End" });
+  expect(separator.getAttribute("aria-valuenow")).toBe("50");
+  fireEvent.keyDown(separator, { key: "ArrowLeft" });
+  expect(separator.getAttribute("aria-valuenow")).toBe("50");
+  fireEvent.click(screen.getByRole("button", { name: /Close code pane/ }));
+  expect(screen.queryByLabelText("Code pane")).toBeNull();
+  expect(screen.getByText("Open file.ts")).toBe(file);
+  fireEvent.click(screen.getByText("Open selected file"));
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("50");
+  view.unmount();
+  render(createElement(App));
+  fireEvent.click(await screen.findByText("Open file.ts"));
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("50");
+});
+
+test("narrow screen returns to the graph without losing selection or remounting it", async () => {
+  api(snapshot("one", "file.ts"));
+  render(createElement(App));
+  const file = await screen.findByText("Open file.ts");
+  act(() => {
+    measuredWidth = 390;
+    resizeWorkspace();
+  });
+  fireEvent.click(file);
+  const back = screen.getByRole("button", { name: /Back to graph/ });
+  expect(document.activeElement).toBe(back);
+  expect(screen.getByLabelText("Change map").hasAttribute("inert")).toBe(true);
+  fireEvent.click(back);
+  expect(screen.getByLabelText("Change map").hasAttribute("inert")).toBe(false);
+  expect(screen.getByText("Open file.ts")).toBe(file);
+  fireEvent.click(screen.getByText("Open selected file"));
+  expect(screen.getByLabelText("File diff")).toBeTruthy();
+});
+
+test("outside file list can be collapsed and restored; analysis details start collapsed", async () => {
+  const initial = snapshot("one", "README.md");
+  const node = initial.graph.merged.nodes[0];
+  api({
+    ...initial,
+    graph: {
+      ...initial.graph,
+      incomplete: true,
+      merged: {
+        ...initial.graph.merged,
+        nodes: [{ ...node, analyzed: { before: false, after: false } }],
+      },
+    },
+  });
+  const view = render(createElement(App));
+  fireEvent.click(await screen.findByText("README.md"));
+  expect(screen.getByLabelText("File diff")).toBeTruthy();
+  expect(screen.getByText(/Direct users may be missing/).closest("details")?.open).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: /Other files/ }));
+  expect(screen.queryByLabelText("Unanalyzed changed files")).toBeNull();
+  view.unmount();
+  render(createElement(App));
+  const toggle = await screen.findByRole("button", { name: /Other files/ });
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(toggle);
+  expect(screen.getByLabelText("Unanalyzed changed files")).toBeTruthy();
 });
