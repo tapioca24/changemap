@@ -94,7 +94,8 @@ test("diff is default; switching sides cannot display an older asynchronous resp
   );
   vi.stubGlobal("fetch", fetcher);
   render(createElement(CodePane, { snapshot, node: file("a.ts") }));
-  expect(screen.getByLabelText("File diff").textContent).toContain("+new");
+  expect(screen.getByLabelText("File diff").textContent).toContain("new");
+  expect(screen.getByLabelText("File diff").textContent).not.toContain("+new");
   fireEvent.click(screen.getByText("Before · full file"));
   fireEvent.click(screen.getByText("After · full file"));
   expect((await screen.findByLabelText("Full file")).textContent).toContain("captured after");
