@@ -3,7 +3,7 @@ id: doc-1
 title: usage
 type: guide
 created_date: '2026-09-23 15:07'
-updated_date: '2026-09-24 15:54'
+updated_date: '2026-09-24 18:06'
 ---
 # Usage guide
 
@@ -95,7 +95,8 @@ refresh; explicit commit IDs remain fixed.
 Select a file in the change map to read its diff or captured before/after contents.
 Deleted files initially show their old full contents; unchanged neighbors show
 full contents. Renames retain both paths. Binary files show a text-unavailable
-message. Files outside dependency analysis appear in a separate area.
+message. Files outside dependency analysis appear in a separate area. On wide
+screens, the code pane is limited to the smaller of 55% of the workspace or 1440px.
 
 Text diffs and full files use syntax colors for TypeScript, JavaScript, JSON, CSS,
 HTML, Markdown, Python, Go, Rust, Java, C/C++, C#, Ruby, PHP, shell scripts,
@@ -105,6 +106,15 @@ diff lines have distinct backgrounds, without `+` or `-` code prefixes. The
 code appears immediately while highlighting loads. Files over 300,000 characters
 or 5,000 lines, and files whose highlighting fails, remain readable without
 syntax colors and show a short reason.
+
+The code pane has display settings above the Diff, Before, and After tabs.
+Diff starts in unified mode with whitespace ignore off. Switch to split mode
+to compare old and new lines side by side with line numbers. Ignore whitespace
+regenerates the displayed diff with Git `-w` from the captured states. It does
+not change file statuses or the dependency map. Long lines always wrap in diffs
+and both full-file views. The two display settings follow file changes and are
+saved in the browser's `changemap.workspace` cookie so they survive the CLI's
+changing port.
 
 The graph uses Dagre layout with left-to-right, top-to-bottom, right-to-left, and
 bottom-to-top orientations. Arrows always point from the referencing file to its
