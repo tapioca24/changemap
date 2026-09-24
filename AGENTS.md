@@ -6,7 +6,7 @@ changemap は Git の変更と TypeScript のファイル依存関係を可視�
 `src/git/` が差分・スナップショット取得、`src/analysis/` が依存解析、`src/graph/` がグラフ統合・選択を担当します。
 `src/review/` はレビューセッション、`src/server/` はローカル HTTP サーバー、`src/cli/` は起動処理です。
 React UI と CSS・HTML は `src/ui/`、共有型は `src/shared/`、設定処理は `src/config/` に置きます。
-テストは `tests/`、共通ヘルパーは `tests/helpers/`、検証スクリプトは `scripts/`、設計資料は `docs/`、タスクは `backlog/` にあります。`dist/` は生成物です。
+テストは `tests/`、共通ヘルパーは `tests/helpers/`、検証スクリプトは `scripts/`、設計・利用・測定資料は `backlog/docs/`、タスクは `backlog/tasks/`、未合意の候補は `backlog/drafts/` にあります。`dist/` は生成物です。
 
 ## 開発・ビルドコマンド
 

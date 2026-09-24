@@ -4,12 +4,12 @@ title: 変更前後の直接近傍とスナップショット統合を実装す�
 status: Done
 assignee: []
 created_date: '2026-09-19 08:47'
-updated_date: '2026-09-19 08:52'
+updated_date: '2026-09-24 03:51'
 labels: []
 milestone: m-2
 dependencies: []
 documentation:
-  - docs/phase-2.md
+  - backlog/docs/doc-3 - analysis-performance.md
 ordinal: 8000
 ---
 

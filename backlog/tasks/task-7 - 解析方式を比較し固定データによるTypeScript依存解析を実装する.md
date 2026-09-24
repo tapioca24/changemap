@@ -4,12 +4,12 @@ title: 解析方式を比較し固定データによるTypeScript依存解析を
 status: Done
 assignee: []
 created_date: '2026-09-19 08:47'
-updated_date: '2026-09-19 08:52'
+updated_date: '2026-09-24 03:52'
 labels: []
 milestone: m-2
 dependencies: []
 documentation:
-  - docs/phase-2.md
+  - backlog/docs/doc-3 - analysis-performance.md
 ordinal: 7000
 ---
 
@@ -22,5 +22,5 @@ ordinal: 7000
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Compiler APIを採用。100/10000ファイルの比較と完成版計測を実施し性能目標を満たした。固定設定・参照構文・未解決と除外をテストした。詳細はdocs/phase-2.md。
+Compiler APIを採用。100/10000ファイルの比較と完成版計測を実施し性能目標を満たした。固定設定・参照構文・未解決と除外をテストした。詳細は[当時の資料](https://github.com/tapioca24/changemap/blob/b9cb948563aba5bbcbb180692e20ca0b67e4c571/docs/phase-2.md)。
 <!-- SECTION:FINAL_SUMMARY:END -->
