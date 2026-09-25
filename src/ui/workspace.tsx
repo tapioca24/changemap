@@ -178,11 +178,17 @@ export function Workspace({
           />
         </div>
         <div className="legend" aria-label="Graph legend">
-          {Object.entries(statusLabels).map(([status, label]) => (
-            <span className={`status ${status}`} key={status}>
-              {label}
-            </span>
-          ))}
+          {Object.entries(statusLabels).map(([status, label]) =>
+            status === "unchanged" ? (
+              <span className="legend-unchanged" key={status}>
+                {label}
+              </span>
+            ) : (
+              <span className={`status-badge ${status}`} key={status}>
+                {label}
+              </span>
+            ),
+          )}
           <small>
             Reference source → target · Edges: + added · − dashed deleted · solid unchanged
           </small>
