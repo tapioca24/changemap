@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, act } from "@testing-library/react"
 import { afterEach, expect, test, vi } from "vitest";
 import { CodePane, defaultDiffDisplay } from "../src/ui/code-pane.js";
 import dagre from "@dagrejs/dagre";
-import { Graph } from "../src/ui/graph.js";
+import { Graph, statusLabels } from "../src/ui/graph.js";
 import { layoutElements, layoutGraph } from "../src/ui/layout.js";
 import type { ReviewSummary } from "../src/shared/review.js";
 import type { MergedFileNode } from "../src/graph/model.js";
@@ -334,4 +334,39 @@ test("directory headings are visible while only files can be selected", () => {
   expect(onSelect).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Open src/deep/index.ts" }));
   expect(onSelect).toHaveBeenCalledWith("src/deep/index.ts");
+});
+
+test("mixed file states keep names visible with badges only on changed nodes", () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  const statuses = ["added", "modified", "deleted", "renamed", "unchanged"] as const;
+  const nodes = statuses.map((status) => ({
+    ...file(`${status}.ts`),
+    status,
+    oldPath: status === "added" ? null : `${status}.ts`,
+    newPath: status === "deleted" ? null : `${status}.ts`,
+  }));
+  const edges = [
+    { source: "added.ts", target: "modified.ts", status: "added" as const },
+    { source: "deleted.ts", target: "unchanged.ts", status: "deleted" as const },
+  ];
+  const graph = { ...snapshot.graph, merged: { nodes, edges } };
+  const { container } = render(
+    createElement(Graph, { graph, direction: "LR", selected: "renamed.ts", onSelect: vi.fn() }),
+  );
+  for (const status of statuses) {
+    const node = screen.getByRole("button", { name: `Open ${status}.ts` });
+    expect(node.classList.contains(status)).toBe(true);
+    expect(node.querySelector("strong")?.textContent).toBe(`${status}.ts`);
+    expect(node.querySelector(".status-badge")?.textContent).toBe(
+      status === "unchanged" ? undefined : statusLabels[status],
+    );
+  }
+  expect(container.querySelector(".react-flow__node.selected .file-node.renamed")).toBeTruthy();
 });

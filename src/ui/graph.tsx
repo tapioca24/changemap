@@ -61,7 +61,9 @@ const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileNodeData>>)
       }}
     >
       <Handle type="target" position={target} />
-      <span className="node-status">{statusLabels[data.file.status]}</span>
+      {data.file.status !== "unchanged" && (
+        <span className="node-status status-badge">{statusLabels[data.file.status]}</span>
+      )}
       <strong title={path}>{path.split("/").pop()}</strong>
       {data.unresolved && <span className="unresolved">! Unresolved references</span>}
       <Handle type="source" position={source} />
