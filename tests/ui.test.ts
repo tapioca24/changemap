@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { CodePane, defaultDiffDisplay } from "../src/ui/code-pane.js";
 import dagre from "@dagrejs/dagre";
 import { Graph } from "../src/ui/graph.js";
-import { layoutGraph } from "../src/ui/layout.js";
+import { layoutElements, layoutGraph } from "../src/ui/layout.js";
 import type { ReviewSummary } from "../src/shared/review.js";
 import type { MergedFileNode } from "../src/graph/model.js";
 const file = (id: string): MergedFileNode => ({
@@ -80,6 +80,115 @@ test("cyclic and self dependencies produce finite, distinct node positions", () 
   expect(new Set(nodes.map((n) => `${n.position.x}:${n.position.y}`)).size).toBe(3);
   for (const node of nodes)
     expect(Number.isFinite(node.position.x) && Number.isFinite(node.position.y)).toBe(true);
+});
+test.each(["LR", "RL", "TB", "BT"] as const)(
+  "nested directories in %s contain their files and preserve dependency routes",
+  (direction) => {
+    const moved = {
+      ...file("moved"),
+      oldPath: "old/index.ts",
+      newPath: "src/deep/index.ts",
+      status: "renamed" as const,
+    };
+    const deleted = {
+      ...file("deleted"),
+      oldPath: "src/gone.ts",
+      newPath: null,
+      status: "deleted" as const,
+    };
+    const root = file("root.ts");
+    const hidden = {
+      ...file("hidden.ts"),
+      newPath: "unused/hidden.ts",
+      analyzed: { before: false, after: false },
+    };
+    const graph = {
+      ...snapshot.graph,
+      merged: {
+        nodes: [moved, deleted, root, hidden],
+        edges: [
+          { source: "moved", target: "deleted", status: "deleted" as const },
+          { source: "root.ts", target: "moved", status: "added" as const },
+        ],
+      },
+    };
+    const { nodes, routes, fileBounds } = layoutElements(graph, direction);
+    expect(nodes.map((node) => node.id)).toEqual([
+      "directory:src",
+      "directory:src/deep",
+      "moved",
+      "deleted",
+      "root.ts",
+    ]);
+    expect(nodes.find((node) => node.id === "directory:src/deep")?.parentId).toBe("directory:src");
+    expect(nodes.find((node) => node.id === "moved")?.parentId).toBe("directory:src/deep");
+    expect(nodes.find((node) => node.id === "deleted")?.parentId).toBe("directory:src");
+    expect(nodes.find((node) => node.id === "root.ts")?.parentId).toBeUndefined();
+    for (const node of nodes) {
+      if (!node.parentId) continue;
+      const parent = nodes.find((candidate) => candidate.id === node.parentId)!;
+      expect(node.position.x).toBeGreaterThanOrEqual(0);
+      expect(node.position.y).toBeGreaterThanOrEqual(20);
+      expect(node.position.x + node.width!).toBeLessThanOrEqual(parent.width!);
+      expect(node.position.y + node.height!).toBeLessThanOrEqual(parent.height!);
+    }
+    expect(fileBounds.get("moved")?.position).toEqual({
+      x:
+        nodes.find((node) => node.id === "directory:src")!.position.x +
+        nodes.find((node) => node.id === "directory:src/deep")!.position.x +
+        nodes.find((node) => node.id === "moved")!.position.x,
+      y:
+        nodes.find((node) => node.id === "directory:src")!.position.y +
+        nodes.find((node) => node.id === "directory:src/deep")!.position.y +
+        nodes.find((node) => node.id === "moved")!.position.y,
+    });
+    expect(routes).toHaveLength(2);
+    for (const [index, route] of routes.entries()) {
+      expect(route.length).toBeGreaterThanOrEqual(2);
+      for (const point of route) {
+        expect(Number.isFinite(point.x) && Number.isFinite(point.y)).toBe(true);
+      }
+      const edge = graph.merged.edges[index];
+      const source = fileBounds.get(edge.source)!;
+      const target = fileBounds.get(edge.target)!;
+      const start = route[0];
+      const end = route.at(-1)!;
+      if (direction === "LR" || direction === "RL") {
+        expect(start.y).toBe(source.position.y + source.height / 2);
+        expect(end.y).toBe(target.position.y + target.height / 2);
+        expect(start.x).toBe(source.position.x + (direction === "LR" ? source.width : 0));
+        expect(end.x).toBe(target.position.x + (direction === "LR" ? 0 : target.width));
+      } else {
+        expect(start.x).toBe(source.position.x + source.width / 2);
+        expect(end.x).toBe(target.position.x + target.width / 2);
+        expect(start.y).toBe(source.position.y + (direction === "TB" ? source.height : 0));
+        expect(end.y).toBe(target.position.y + (direction === "TB" ? 0 : target.height));
+      }
+    }
+  },
+);
+test("many dependencies across sibling directories keep every file and edge visible", () => {
+  const nodes = Array.from({ length: 120 }, (_, index) =>
+    file(`src/area-${index % 8}/file-${index}.ts`),
+  );
+  const edges = nodes.flatMap((node, index) =>
+    [1, 8, 17]
+      .filter((offset) => index + offset < nodes.length)
+      .map((offset) => ({
+        source: node.id,
+        target: nodes[index + offset].id,
+        status: "unchanged" as const,
+      })),
+  );
+  const result = layoutElements({ ...snapshot.graph, merged: { nodes, edges } }, "LR");
+  expect(result.fileBounds.size).toBe(nodes.length);
+  expect(result.routes).toHaveLength(edges.length);
+  expect(result.nodes.filter((node) => node.type === "directory")).toHaveLength(9);
+  expect(
+    result.routes.every((route) =>
+      route.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y)),
+    ),
+  ).toBe(true);
 });
 test("diff is default; switching sides cannot display an older asynchronous response", async () => {
   let finishBefore!: (response: Response) => void;
@@ -198,4 +307,31 @@ test("layout failure preserves access to every analyzed file instead of crashing
   expect(screen.getAllByRole("option")).toHaveLength(4);
   fireEvent.change(screen.getByLabelText("File to review"), { target: { value: "alone.ts" } });
   expect(onSelect).toHaveBeenCalledWith("alone.ts");
+});
+
+test("directory headings are visible while only files can be selected", () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  const onSelect = vi.fn();
+  const graph = {
+    ...snapshot.graph,
+    merged: {
+      nodes: [file("src/deep/index.ts")],
+      edges: [],
+    },
+  };
+  render(createElement(Graph, { graph, direction: "LR", selected: null, onSelect }));
+  expect(screen.getByText("src")).toBeTruthy();
+  expect(screen.getByText("deep")).toBeTruthy();
+  expect(screen.getByText("index.ts")).toBeTruthy();
+  fireEvent.click(screen.getByText("deep"));
+  expect(onSelect).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Open src/deep/index.ts" }));
+  expect(onSelect).toHaveBeenCalledWith("src/deep/index.ts");
 });

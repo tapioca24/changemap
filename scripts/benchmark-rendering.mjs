@@ -8,9 +8,18 @@ import { renderingFixture } from "./rendering/fixture.mjs";
 
 const run = promisify(execFile);
 const root = new URL("../dist/ui/", import.meta.url);
-const size = Number(process.argv[2] ?? 100);
-const shape = process.argv[3] ?? "layered";
-const fixture = renderingFixture(size, shape);
+const mixedEdges = process.argv.includes("--mixed-edges");
+const args = process.argv.slice(2).filter((arg) => arg !== "--mixed-edges");
+const size = Number(args[0] ?? 100);
+const shape = args[1] ?? "layered";
+const fixture = renderingFixture(size, shape, { mixedEdges });
+const directories = new Set();
+for (const node of fixture.graph.merged.nodes) {
+  const parts = node.newPath.split("/");
+  for (let depth = 1; depth < parts.length; depth++) {
+    directories.add(parts.slice(0, depth).join("/"));
+  }
+}
 const session = `changemap-benchmark-${process.pid}`;
 let settings = { theme: "mocha", orientation: "LR" };
 const server = createServer(async (req, res) => {
@@ -35,7 +44,7 @@ const server = createServer(async (req, res) => {
     } else if (path === "/observe.js") {
       res.setHeader("Content-Type", "text/javascript");
       res.end(
-        `window.renderingExpected = ${JSON.stringify({ nodes: size, edges: fixture.graph.merged.edges.length })};\n` +
+        `window.renderingExpected = ${JSON.stringify({ nodes: size, directories: directories.size, edges: fixture.graph.merged.edges.length })};\n` +
           (await readFile(new URL("./rendering/observe.js", import.meta.url), "utf8")),
       );
     } else if (path === "/") {
@@ -74,7 +83,9 @@ try {
     JSON.stringify({
       size,
       edges: fixture.graph.merged.edges.length,
+      directories: directories.size,
       shape,
+      mixedEdges,
       node: process.version,
       os: `${platform()} ${release()}`,
       cpu: cpus()[0]?.model,
@@ -116,6 +127,10 @@ try {
       document.querySelectorAll('.file-node')[i].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       await paint();
       if (!document.querySelector('[aria-label="File diff"]')) throw Error('Selection did not open diff');
+      const selectedEdges = document.querySelectorAll('.react-flow__edge.edge-active').length;
+      const selectedDots = document.querySelectorAll('.react-flow__edge.edge-active .edge-dots').length;
+      if (!selectedEdges || selectedDots !== selectedEdges)
+        throw Error('Selection did not animate every related edge');
       const selectMs = performance.now() - start;
       start = performance.now();
       const select = document.querySelector('select');
@@ -126,13 +141,142 @@ try {
       timings.push({ selectMs, themeMs: performance.now() - start });
     }
     return JSON.stringify({ timings });
-  })()`);
+    })()`);
     console.log(JSON.stringify(interactions));
+    const hover = await evaluate(`(async () => {
+      const paint = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const node = document.querySelector('.file-node');
+      const edge = document.querySelector('.react-flow__edge-interaction');
+      const selectedDotGroups = document.querySelectorAll('.edge-dots').length;
+      let start = performance.now();
+      node.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      await paint();
+      const nodeDeadline = performance.now() + 10000;
+      while (!document.querySelector('.edge-dots') && performance.now() < nodeDeadline)
+        await paint();
+      const nodeMs = performance.now() - start;
+      const nodeEdges = document.querySelectorAll('.react-flow__edge.edge-active').length;
+      const nodeDotGroups = document.querySelectorAll('.react-flow__edge.edge-active .edge-dots').length;
+      node.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+      await paint();
+      const clearDeadline = performance.now() + 10000;
+      while (document.querySelectorAll('.edge-dots').length !== selectedDotGroups && performance.now() < clearDeadline)
+        await paint();
+      start = performance.now();
+      edge.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      await paint();
+      const edgeDeadline = performance.now() + 10000;
+      while (!document.querySelector('.edge-dots') && performance.now() < edgeDeadline)
+        await paint();
+      const edgeMs = performance.now() - start;
+      const edgeCount = document.querySelectorAll('.react-flow__edge.edge-active').length;
+      if (!nodeEdges || nodeDotGroups !== nodeEdges || edgeCount !== 1)
+        throw Error('Hover did not highlight and animate all related dependency edges: ' +
+          JSON.stringify({ nodeEdges, nodeDotGroups, edgeCount }));
+      return JSON.stringify({ nodeMs, nodeEdges, edgeMs, edgeCount });
+    })()`);
+    console.log(JSON.stringify({ hover }));
+    const dots = await evaluate(`(async () => {
+      const active = document.querySelector('.react-flow__edge.edge-active');
+      const line = active.querySelector('.react-flow__edge-path');
+      const dots = active.querySelector('.edge-dots');
+      if (!dots || dots.getAttribute('stroke-width') !== '5' || dots.getAttribute('stroke-dasharray') !== '0 120')
+        throw Error('Moving dots are missing');
+      if (line.style.strokeLinecap !== 'round' || line.style.strokeWidth !== '2') throw Error('Edge appearance is wrong');
+      const normal = document.querySelector('.react-flow__edge:not(.edge-active) .react-flow__edge-path');
+      if (normal?.style.strokeWidth !== '2' || !line.getAttribute('marker-end'))
+        throw Error('Normal edge width or arrowhead is wrong');
+      const gradient = active.querySelector('linearGradient');
+      const mask = active.querySelector('mask');
+      let fadePixels;
+      if (gradient) {
+        const stops = [...gradient.querySelectorAll('stop')];
+        if (stops.length !== 4 || stops[0].getAttribute('stop-opacity') !== '0' ||
+          stops[3].getAttribute('stop-opacity') !== '0' ||
+          !dots.getAttribute('stroke')?.includes(gradient.id) ||
+          getComputedStyle(stops[1]).stopColor !== getComputedStyle(line).stroke)
+          throw Error('Dot gradient or endpoint fade is wrong');
+        const color = getComputedStyle(line).stroke;
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="20">' +
+          '<defs><linearGradient id="fade" gradientUnits="userSpaceOnUse" x1="50" x2="950">' +
+          stops.map(stop => '<stop offset="' + stop.getAttribute('offset') +
+            '" stop-color="' + color + '" stop-opacity="' +
+            (stop.getAttribute('stop-opacity') ?? '1') + '"/>').join('') +
+          '</linearGradient></defs><path d="M 50,10 L 950,10" fill="none" stroke="url(#fade)"' +
+          ' stroke-width="5" stroke-linecap="round"/></svg>';
+        const image = new Image();
+        image.src = 'data:image/svg+xml,' + encodeURIComponent(svg);
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = 1000;
+        canvas.height = 20;
+        const context = canvas.getContext('2d');
+        context.drawImage(image, 0, 0);
+        fadePixels = [50, 500, 950].map(x => context.getImageData(x, 10, 1, 1).data[3]);
+        if (fadePixels[1] < 200 || fadePixels[0] > 10 || fadePixels[2] > 10)
+          throw Error('Endpoint gradient is not transparent when painted');
+      } else if (!mask || mask.querySelectorAll('circle').length !== 2 ||
+        !dots.getAttribute('mask')?.includes(mask.id) ||
+        getComputedStyle(dots).stroke !== getComputedStyle(line).stroke) {
+        throw Error('Dots do not fade at both endpoints');
+      }
+      if (getComputedStyle(dots).animationDuration !== '1.5s')
+        throw Error('Dot speed is wrong');
+      const first = Number.parseFloat(getComputedStyle(dots).strokeDashoffset);
+      await new Promise(r => setTimeout(r, 120));
+      const next = Number.parseFloat(getComputedStyle(dots).strokeDashoffset);
+      const moved = Math.abs(next - first);
+      if (moved < 1) throw Error('Dot did not move along the edge');
+      return JSON.stringify({ moved, fadePixels });
+    })()`);
+    console.log(JSON.stringify({ dots }));
+    if (size <= 100) {
+      const longEdge = await evaluate(`(async () => {
+      const all = [...document.querySelectorAll('.react-flow__edge')];
+      const longest = all.reduce((best, edge) =>
+        edge.querySelector('.react-flow__edge-path').getTotalLength() >
+        best.querySelector('.react-flow__edge-path').getTotalLength() ? edge : best);
+      const interaction = longest.querySelector('.react-flow__edge-interaction');
+      interaction.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const dots = longest.querySelector('.edge-dots');
+      if (!dots || dots.getAttribute('stroke-dasharray') !== '0 120')
+        throw Error('Long edge did not receive evenly spaced dots');
+      return JSON.stringify({ length: longest.querySelector('.react-flow__edge-path').getTotalLength() });
+      })()`);
+      console.log(JSON.stringify({ longEdge }));
+    }
+    const appearance = await evaluate(
+      await readFile(new URL("./rendering/appearance.js", import.meta.url), "utf8"),
+    );
+    if (mixedEdges && appearance.statuses.length !== 3)
+      throw Error("Mixed edge appearance was not checked for every status");
+    console.log(JSON.stringify({ appearance }));
+    if (args[2]) {
+      await evaluate(`(async () => {
+        const zoom = document.querySelector('.react-flow__controls-zoomin');
+        for (let i = 0; i < 2; i++) zoom.click();
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return JSON.stringify('zoomed');
+      })()`);
+      await browser("screenshot", args[2]);
+    }
+    await browser("set", "media", "light", "reduced-motion");
+    const reducedMotion = await evaluate(`JSON.stringify({
+      enabled: matchMedia('(prefers-reduced-motion: reduce)').matches,
+      dotsHidden: getComputedStyle(document.querySelector('.react-flow__edge.edge-active .edge-dots')).display === 'none',
+      edgeStillActive: !!document.querySelector('.react-flow__edge.edge-active')
+    })`);
+    if (!reducedMotion.enabled || !reducedMotion.dotsHidden || !reducedMotion.edgeStillActive)
+      throw Error("Reduced motion did not hide dots and preserve the highlighted edge");
+    console.log(JSON.stringify({ reducedMotion }));
     if (size <= 1000) {
       const initialLimit = size <= 100 ? 1000 : 3000;
       const passed =
         initial.initialMs <= initialLimit &&
-        interactions.timings.every((sample) => sample.selectMs <= 300 && sample.themeMs <= 300);
+        interactions.timings.every((sample) => sample.selectMs <= 300 && sample.themeMs <= 300) &&
+        hover.nodeMs <= 300 &&
+        hover.edgeMs <= 300;
       console.log(
         JSON.stringify({
           targetPassed: passed,
@@ -143,7 +287,6 @@ try {
       if (!passed) process.exitCode = 1;
     }
   }
-  if (process.argv[4]) await browser("screenshot", process.argv[4]);
   const errors = JSON.parse(await browser("errors", "--json"));
   console.log(JSON.stringify({ browserErrors: errors.data?.errors ?? errors }));
   if (!errors.success || errors.data.errors.length) process.exitCode = 1;
