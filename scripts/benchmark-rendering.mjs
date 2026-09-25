@@ -186,11 +186,40 @@ try {
       const normal = document.querySelector('.react-flow__edge:not(.edge-active) .react-flow__edge-path');
       if (normal?.style.strokeWidth !== '2' || !line.getAttribute('marker-end'))
         throw Error('Normal edge width or arrowhead is wrong');
-      if (getComputedStyle(dots).stroke !== getComputedStyle(line).stroke)
-        throw Error('Dots do not match the edge color');
+      const gradient = active.querySelector('linearGradient');
       const mask = active.querySelector('mask');
-      if (!mask || mask.querySelectorAll('circle').length !== 2 || !dots.getAttribute('mask')?.includes(mask.id))
+      let fadePixels;
+      if (gradient) {
+        const stops = [...gradient.querySelectorAll('stop')];
+        if (stops.length !== 4 || stops[0].getAttribute('stop-opacity') !== '0' ||
+          stops[3].getAttribute('stop-opacity') !== '0' ||
+          !dots.getAttribute('stroke')?.includes(gradient.id) ||
+          getComputedStyle(stops[1]).stopColor !== getComputedStyle(line).stroke)
+          throw Error('Dot gradient or endpoint fade is wrong');
+        const color = getComputedStyle(line).stroke;
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="20">' +
+          '<defs><linearGradient id="fade" gradientUnits="userSpaceOnUse" x1="50" x2="950">' +
+          stops.map(stop => '<stop offset="' + stop.getAttribute('offset') +
+            '" stop-color="' + color + '" stop-opacity="' +
+            (stop.getAttribute('stop-opacity') ?? '1') + '"/>').join('') +
+          '</linearGradient></defs><path d="M 50,10 L 950,10" fill="none" stroke="url(#fade)"' +
+          ' stroke-width="5" stroke-linecap="round"/></svg>';
+        const image = new Image();
+        image.src = 'data:image/svg+xml,' + encodeURIComponent(svg);
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = 1000;
+        canvas.height = 20;
+        const context = canvas.getContext('2d');
+        context.drawImage(image, 0, 0);
+        fadePixels = [50, 500, 950].map(x => context.getImageData(x, 10, 1, 1).data[3]);
+        if (fadePixels[1] < 200 || fadePixels[0] > 10 || fadePixels[2] > 10)
+          throw Error('Endpoint gradient is not transparent when painted');
+      } else if (!mask || mask.querySelectorAll('circle').length !== 2 ||
+        !dots.getAttribute('mask')?.includes(mask.id) ||
+        getComputedStyle(dots).stroke !== getComputedStyle(line).stroke) {
         throw Error('Dots do not fade at both endpoints');
+      }
       if (getComputedStyle(dots).animationDuration !== '1.5s')
         throw Error('Dot speed is wrong');
       const first = Number.parseFloat(getComputedStyle(dots).strokeDashoffset);
@@ -198,7 +227,7 @@ try {
       const next = Number.parseFloat(getComputedStyle(dots).strokeDashoffset);
       const moved = Math.abs(next - first);
       if (moved < 1) throw Error('Dot did not move along the edge');
-      return JSON.stringify({ moved });
+      return JSON.stringify({ moved, fadePixels });
     })()`);
     console.log(JSON.stringify({ dots }));
     if (size <= 100) {

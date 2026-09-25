@@ -104,8 +104,28 @@ function DependencyEdge({
   const gradientId = `edge-dots-gradient-${id}`;
   const start = data!.points[0];
   const end = data!.points.at(-1)!;
+  const horizontal = data!.direction === "LR" || data!.direction === "RL";
+  const span = Math.abs(horizontal ? end.x - start.x : end.y - start.y);
+  const forward =
+    (horizontal ? end.x - start.x : end.y - start.y) *
+      (data!.direction === "LR" || data!.direction === "TB" ? 1 : -1) >=
+    0;
+  const linearFade = forward && span > edgeAppearance.fadeDistance * 4;
+  const fadeOffset = `${(edgeAppearance.fadeDistance / span) * 100}%`;
   return (
     <>
+      {data!.animate && (
+        <path
+          d={path}
+          className="edge-glow"
+          fill="none"
+          stroke={style?.stroke}
+          strokeWidth={8}
+          strokeLinecap="round"
+          aria-hidden="true"
+          pointerEvents="none"
+        />
+      )}
       <BaseEdge
         id={id}
         path={path}
@@ -127,41 +147,62 @@ function DependencyEdge({
       {data!.animate && (
         <>
           <defs>
-            <radialGradient id={gradientId}>
-              <stop offset="0" stopColor="black" />
-              <stop offset="1" stopColor="white" />
-            </radialGradient>
-            <mask id={fadeId} maskUnits="userSpaceOnUse" {...bounds}>
-              <path
-                d={path}
-                fill="none"
-                stroke="white"
-                strokeWidth={edgeAppearance.dotDiameter + 1}
-                strokeLinecap="round"
-              />
-              <circle
-                cx={start.x}
-                cy={start.y}
-                r={edgeAppearance.fadeDistance}
-                fill={`url(#${gradientId})`}
-              />
-              <circle
-                cx={end.x}
-                cy={end.y}
-                r={edgeAppearance.fadeDistance}
-                fill={`url(#${gradientId})`}
-              />
-            </mask>
+            {linearFade ? (
+              <linearGradient
+                id={gradientId}
+                gradientUnits="userSpaceOnUse"
+                x1={horizontal ? start.x : 0}
+                y1={horizontal ? 0 : start.y}
+                x2={horizontal ? end.x : 0}
+                y2={horizontal ? 0 : end.y}
+              >
+                <stop offset="0" stopColor={style?.stroke} stopOpacity="0" />
+                <stop offset={fadeOffset} stopColor={style?.stroke} />
+                <stop
+                  offset={`${100 - (edgeAppearance.fadeDistance / span) * 100}%`}
+                  stopColor={style?.stroke}
+                />
+                <stop offset="1" stopColor={style?.stroke} stopOpacity="0" />
+              </linearGradient>
+            ) : (
+              <>
+                <radialGradient id={gradientId}>
+                  <stop offset="0" stopColor="black" />
+                  <stop offset="1" stopColor="white" />
+                </radialGradient>
+                <mask id={fadeId} maskUnits="userSpaceOnUse" {...bounds}>
+                  <path
+                    d={path}
+                    fill="none"
+                    stroke="white"
+                    strokeWidth={edgeAppearance.dotDiameter + 1}
+                    strokeLinecap="round"
+                  />
+                  <circle
+                    cx={start.x}
+                    cy={start.y}
+                    r={edgeAppearance.fadeDistance}
+                    fill={`url(#${gradientId})`}
+                  />
+                  <circle
+                    cx={end.x}
+                    cy={end.y}
+                    r={edgeAppearance.fadeDistance}
+                    fill={`url(#${gradientId})`}
+                  />
+                </mask>
+              </>
+            )}
           </defs>
           <path
             d={path}
             className="edge-dots"
             fill="none"
-            stroke={style?.stroke}
+            stroke={linearFade ? `url(#${gradientId})` : style?.stroke}
             strokeWidth={edgeAppearance.dotDiameter}
             strokeLinecap="round"
             strokeDasharray={`0 ${edgeAppearance.dotSpacing}`}
-            mask={`url(#${fadeId})`}
+            mask={linearFade ? undefined : `url(#${fadeId})`}
             style={
               {
                 animationDuration: `${edgeAppearance.dotSpacing / edgeAppearance.dotSpeed}s`,

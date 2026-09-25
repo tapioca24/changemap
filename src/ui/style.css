@@ -226,8 +226,8 @@ p {
   background: var(--overlay1);
   border-color: var(--base);
 }
-.react-flow__edge.edge-active .react-flow__edge-path {
-  filter: drop-shadow(0 0 3px var(--text));
+.edge-glow {
+  stroke-opacity: 0.25;
 }
 .edge-dots {
   animation: edge-dots linear infinite;
