@@ -1,5 +1,5 @@
 // Deterministic synthetic review; all files changed so the entire graph is visible.
-export function renderingFixture(size, shape = "layered") {
+export function renderingFixture(size, shape = "layered", { mixedEdges = false } = {}) {
   if (!Number.isInteger(size) || size < 40) throw new Error("Size must be an integer >= 40");
   if (!["layered", "grouped", "chain", "hub"].includes(shape))
     throw new Error("Unknown graph shape");
@@ -39,11 +39,16 @@ export function renderingFixture(size, shape = "layered") {
     for (let i = 1; i < size; i++) add(shape === "hub" ? 0 : i - 1, i);
   }
   const edges = [...pairs.values()];
+  if (mixedEdges) {
+    edges.forEach((edge, index) => {
+      edge.status = ["unchanged", "added", "deleted"][index % 3];
+    });
+  }
   const dependencies = edges.map(({ source, target }) => ({
     source: nodes[Number(source.slice(5))].newPath,
     target: nodes[Number(target.slice(5))].newPath,
   }));
-  const state = {
+  const state = (dependencies) => ({
     nodes: nodes.map((n) => ({ path: n.newPath })),
     edges: dependencies,
     references: dependencies.map((edge) => ({
@@ -56,7 +61,9 @@ export function renderingFixture(size, shape = "layered") {
       outcome: "resolved",
     })),
     diagnostics: [],
-  };
+  });
+  const beforeEdges = dependencies.filter((_, index) => edges[index].status !== "added");
+  const afterEdges = dependencies.filter((_, index) => edges[index].status !== "deleted");
   return {
     id: "rendering-fixture",
     capturedAt: "2026-09-23T00:00:00.000Z",
@@ -66,14 +73,14 @@ export function renderingFixture(size, shape = "layered") {
     after: { kind: "worktree", label: "Working tree" },
     changes,
     graph: {
-      before: state,
-      after: state,
+      before: state(beforeEdges),
+      after: state(afterEdges),
       merged: { nodes, edges },
       incomplete: false,
       selection: {
         paths: nodes.map((n) => n.newPath),
-        beforeEdges: dependencies,
-        afterEdges: dependencies,
+        beforeEdges,
+        afterEdges,
         unanalyzedChanges: [],
       },
     },

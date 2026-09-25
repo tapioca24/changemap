@@ -90,6 +90,7 @@ function DependencyEdge({
     targetFan: number;
     bend: number;
     animate: boolean;
+    muted: boolean;
   }>
 >) {
   const { path, bounds, labelX, labelY } = edgePath(
@@ -113,8 +114,15 @@ function DependencyEdge({
         label={label}
         labelX={labelX}
         labelY={labelY}
-        labelStyle={{ fill: "var(--text)", fontSize: 10 }}
-        labelBgStyle={{ fill: "var(--base)" }}
+        labelStyle={{
+          fill: "var(--text)",
+          fontSize: 10,
+          fillOpacity: data!.muted ? edgeAppearance.mutedOpacity : 1,
+        }}
+        labelBgStyle={{
+          fill: "var(--base)",
+          fillOpacity: data!.muted ? edgeAppearance.mutedOpacity : 1,
+        }}
       />
       {data!.animate && (
         <>
@@ -276,7 +284,12 @@ export const Graph = memo(function Graph({
               ? edge.source === focus.id || edge.target === focus.id
               : selected !== null && (edge.source === selected || edge.target === selected);
         const muted = (focus !== null || selected !== null) && !active;
-        const color = `var(--${edge.status === "added" ? "green" : edge.status === "deleted" ? "red" : "overlay1"})`;
+        const baseColor = `var(--${edge.status === "added" ? "green" : edge.status === "deleted" ? "red" : "overlay1"})`;
+        // Alpha on each paint avoids compositing a large translucent SVG group.
+        // Share the color with the marker so arrowheads fade with their lines.
+        const color = muted
+          ? `color-mix(in srgb, ${baseColor} ${edgeAppearance.mutedOpacity * 100}%, transparent)`
+          : baseColor;
         return {
           ...edge,
           id: `edge-${i}`,
@@ -288,6 +301,7 @@ export const Graph = memo(function Graph({
             targetFan: sourceFans.target[i],
             bend: i % 2 === 0 ? 12 : -12,
             animate: active,
+            muted,
           },
           label:
             edge.status === "unchanged"

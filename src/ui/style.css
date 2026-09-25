@@ -226,9 +226,6 @@ p {
   background: var(--overlay1);
   border-color: var(--base);
 }
-.react-flow__edge.edge-muted {
-  opacity: 0.12;
-}
 .react-flow__edge.edge-active .react-flow__edge-path {
   filter: drop-shadow(0 0 3px var(--text));
 }

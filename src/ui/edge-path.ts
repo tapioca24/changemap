@@ -6,6 +6,7 @@ type FileBounds = { position: Point; width: number; height: number };
 export const edgeAppearance = {
   normalWidth: 2,
   activeWidth: 2,
+  mutedOpacity: 0.12,
   dotDiameter: 5,
   dotSpacing: 120,
   dotSpeed: 80,

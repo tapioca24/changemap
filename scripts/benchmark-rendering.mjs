@@ -8,9 +8,11 @@ import { renderingFixture } from "./rendering/fixture.mjs";
 
 const run = promisify(execFile);
 const root = new URL("../dist/ui/", import.meta.url);
-const size = Number(process.argv[2] ?? 100);
-const shape = process.argv[3] ?? "layered";
-const fixture = renderingFixture(size, shape);
+const mixedEdges = process.argv.includes("--mixed-edges");
+const args = process.argv.slice(2).filter((arg) => arg !== "--mixed-edges");
+const size = Number(args[0] ?? 100);
+const shape = args[1] ?? "layered";
+const fixture = renderingFixture(size, shape, { mixedEdges });
 const directories = new Set();
 for (const node of fixture.graph.merged.nodes) {
   const parts = node.newPath.split("/");
@@ -83,6 +85,7 @@ try {
       edges: fixture.graph.merged.edges.length,
       directories: directories.size,
       shape,
+      mixedEdges,
       node: process.version,
       os: `${platform()} ${release()}`,
       cpu: cpus()[0]?.model,
@@ -214,14 +217,20 @@ try {
       })()`);
       console.log(JSON.stringify({ longEdge }));
     }
-    if (process.argv[4]) {
+    const appearance = await evaluate(
+      await readFile(new URL("./rendering/appearance.js", import.meta.url), "utf8"),
+    );
+    if (mixedEdges && appearance.statuses.length !== 3)
+      throw Error("Mixed edge appearance was not checked for every status");
+    console.log(JSON.stringify({ appearance }));
+    if (args[2]) {
       await evaluate(`(async () => {
         const zoom = document.querySelector('.react-flow__controls-zoomin');
-        for (let i = 0; i < 8; i++) zoom.click();
+        for (let i = 0; i < 2; i++) zoom.click();
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         return JSON.stringify('zoomed');
       })()`);
-      await browser("screenshot", process.argv[4]);
+      await browser("screenshot", args[2]);
     }
     await browser("set", "media", "light", "reduced-motion");
     const reducedMotion = await evaluate(`JSON.stringify({
