@@ -3,7 +3,7 @@ id: doc-2
 title: architecture
 type: other
 created_date: '2026-09-24 03:26'
-updated_date: '2026-09-24 03:26'
+updated_date: '2026-09-25 07:29'
 ---
 # 設計と保守上の判断
 
@@ -49,13 +49,13 @@ CLI・HTTPサーバー・React UIを単一のnpmパッケージとして配布�
 
 ノードIDは比較内でのみ有効。前状態のパスを基準とし、追加ファイルには後状態の名前空間を使う。旧パスを新規ファイルが再利用しても衝突しない。片側だけ解析対象のrenameも一つのノードにまとめ、解析されている側の辺を保持する。
 
-全変更ファイルと、変更前後の直接の依存先・利用元の和集合を選ぶ。選択されたノード間の辺は両状態からすべて残す。離れた変更同士の経路を自動補完せず、ディレクトリ集約も行わない。例えば変更A→未変更B→未変更C→変更DではB→Cも表示するが、変更A→未変更B→未変更C→未変更D→変更Eでは他の接続がなければCは選ばれない。
+全変更ファイルと、変更前後の直接の依存先・利用元の和集合を選ぶ。選択されたノード間の辺は両状態からすべて残す。離れた変更同士の経路を自動補完せず、ファイルノードや依存辺は集約しない。例えば変更A→未変更B→未変更C→変更DではB→Cも表示するが、変更A→未変更B→未変更C→未変更D→変更Eでは他の接続がなければCは選ばれない。
 
-この表示方針はDelta TypeScript Graph Actionのコード読解を参考にした。調査対象はActionのcommit ca315569e76ea289de14d72acce2e86152b92aceとtypescript-graph v0.26.5で、実行検証ではない。[周辺選択と辺の復元](https://github.com/ysk8hori/typescript-graph/blob/v0.26.5/src/feature/graph/filterGraph.ts)と[統合・集約](https://github.com/ysk8hori/delta-typescript-graph-action/blob/ca315569e76ea289de14d72acce2e86152b92ace/src/graph/mergeGraphsWithDifferences.ts)を参照した。changemapではファイル単位の表示を選び、同Actionのディレクトリ集約やノード上限による非表示は採用していない。
+この表示方針はDelta TypeScript Graph Actionのコード読解を参考にした。調査対象はActionのcommit ca315569e76ea289de14d72acce2e86152b92aceとtypescript-graph v0.26.5で、実行検証ではない。[周辺選択と辺の復元](https://github.com/ysk8hori/typescript-graph/blob/v0.26.5/src/feature/graph/filterGraph.ts)と[統合・集約](https://github.com/ysk8hori/delta-typescript-graph-action/blob/ca315569e76ea289de14d72acce2e86152b92ace/src/graph/mergeGraphsWithDifferences.ts)を参照した。changemapではファイル単位の依存辺を維持し、ディレクトリは表示上の入れ子枠とする。同Actionの辺の集約やノード上限による非表示は採用していない。
 
 ## UIと設定の判断
 
-React FlowとDagreを使用する。初版はファイル単位の平坦なグラフなので、豊富な配置機能を持つELKではなくDagreを採用した。循環依存の戻り線がノードと重なるのを避けるため、標準Bezier線ではなくDagreの経路を描画する。[layout.ts](../../src/ui/layout.ts) と [graph.tsx](../../src/ui/graph.tsx) を参照する。
+React FlowとDagreを使用する。初版の平坦なファイル配置に対してDagreを採用し、現在は表示対象ファイルのディレクトリ階層を入れ子枠として配置する。各階層で直下のファイルと子ディレクトリをDagreに渡し、階層をまたぐ依存は代表ノード間の辺として配置に反映する。ファイル間の依存辺は集約せず、配置後の端点を固定した三次Bezier曲線で描画する。逆向きの辺はDagreの経路を参考に外側へ迂回させる。同じ接続点に集まる辺の制御点は扇状にずらす。ファイル選択時、またはエッジやファイルのホバー時には関連する辺を強調し、同色の円を依存方向へ流す。ホバー中はその対象を優先する。円は両端でフェードし、動きを減らす設定では隠して線の強調だけを残す。線幅はコード内の定数で管理する。リネームは新パス、削除は旧パスのディレクトリに置く。[layout.ts](../../src/ui/layout.ts) と [graph.tsx](../../src/ui/graph.tsx) を参照する。
 
 配置は同期処理で、中断機能はない。例外時はファイル選択から固定コードを読める状態を残すが、グラフ描画成功とは扱わない。[描画測定](<doc-4 - rendering-performance.md>)に10,000ノードでの失敗と測定範囲を記録する。
 

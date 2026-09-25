@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useEffect } from "react";
+import { memo, useCallback, useMemo, useEffect, useState, type CSSProperties } from "react";
 import {
   ReactFlow,
   Background,
@@ -14,7 +14,8 @@ import {
   type NodeProps,
   type Node,
 } from "@xyflow/react";
-import { layoutElements } from "./layout.js";
+import { layoutElements, type DirectoryNodeData, type FileNodeData } from "./layout.js";
+import { edgeAppearance, edgeFans, edgePath } from "./edge-path.js";
 import { revealNode } from "./viewport.js";
 import type { MergedFileNode, ReviewGraph } from "../graph/model.js";
 import type { Settings } from "../shared/settings.js";
@@ -38,13 +39,7 @@ export function references(graph: ReviewGraph, node: MergedFileNode) {
       .map((ref) => ({ ...ref, side })),
   );
 }
-type FileData = {
-  file: MergedFileNode;
-  unresolved: boolean;
-  direction: Settings["orientation"];
-  onSelect?: () => void;
-};
-const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileData>>) {
+const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileNodeData>>) {
   const source = { LR: Position.Right, RL: Position.Left, TB: Position.Bottom, BT: Position.Top }[
     data.direction
   ];
@@ -68,34 +63,109 @@ const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileData>>) {
       <Handle type="target" position={target} />
       <span className="node-status">{statusLabels[data.file.status]}</span>
       <strong title={path}>{path.split("/").pop()}</strong>
-      <small title={path}>{path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "/"}</small>
       {data.unresolved && <span className="unresolved">! Unresolved references</span>}
       <Handle type="source" position={source} />
     </div>
   );
 });
-const nodeTypes = { file: FileNode };
+const DirectoryNode = memo(function DirectoryNode({ data }: NodeProps<Node<DirectoryNodeData>>) {
+  return (
+    <div className="directory-node" title={data.path}>
+      <span className="directory-name">{data.name}</span>
+    </div>
+  );
+});
+const nodeTypes = { file: FileNode, directory: DirectoryNode };
 function DependencyEdge({
   id,
   data,
   label,
   markerEnd,
   style,
-}: EdgeProps<Edge<{ points: { x: number; y: number }[] }>>) {
-  const points = data!.points;
-  const middle = points[Math.floor(points.length / 2)];
+}: EdgeProps<
+  Edge<{
+    points: { x: number; y: number }[];
+    direction: Settings["orientation"];
+    sourceFan: number;
+    targetFan: number;
+    bend: number;
+    animate: boolean;
+  }>
+>) {
+  const { path, bounds, labelX, labelY } = edgePath(
+    data!.points,
+    data!.direction,
+    data!.sourceFan,
+    data!.targetFan,
+    data!.bend,
+  );
+  const fadeId = `edge-dots-fade-${id}`;
+  const gradientId = `edge-dots-gradient-${id}`;
+  const start = data!.points[0];
+  const end = data!.points.at(-1)!;
   return (
-    <BaseEdge
-      id={id}
-      path={points.map((point, i) => `${i ? "L" : "M"} ${point.x},${point.y}`).join(" ")}
-      markerEnd={markerEnd}
-      style={{ ...style, strokeLinejoin: "round" }}
-      label={label}
-      labelX={middle.x}
-      labelY={middle.y}
-      labelStyle={{ fill: "var(--text)", fontSize: 10 }}
-      labelBgStyle={{ fill: "var(--base)" }}
-    />
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        markerEnd={markerEnd}
+        style={style}
+        label={label}
+        labelX={labelX}
+        labelY={labelY}
+        labelStyle={{ fill: "var(--text)", fontSize: 10 }}
+        labelBgStyle={{ fill: "var(--base)" }}
+      />
+      {data!.animate && (
+        <>
+          <defs>
+            <radialGradient id={gradientId}>
+              <stop offset="0" stopColor="black" />
+              <stop offset="1" stopColor="white" />
+            </radialGradient>
+            <mask id={fadeId} maskUnits="userSpaceOnUse" {...bounds}>
+              <path
+                d={path}
+                fill="none"
+                stroke="white"
+                strokeWidth={edgeAppearance.dotDiameter + 1}
+                strokeLinecap="round"
+              />
+              <circle
+                cx={start.x}
+                cy={start.y}
+                r={edgeAppearance.fadeDistance}
+                fill={`url(#${gradientId})`}
+              />
+              <circle
+                cx={end.x}
+                cy={end.y}
+                r={edgeAppearance.fadeDistance}
+                fill={`url(#${gradientId})`}
+              />
+            </mask>
+          </defs>
+          <path
+            d={path}
+            className="edge-dots"
+            fill="none"
+            stroke={style?.stroke}
+            strokeWidth={edgeAppearance.dotDiameter}
+            strokeLinecap="round"
+            strokeDasharray={`0 ${edgeAppearance.dotSpacing}`}
+            mask={`url(#${fadeId})`}
+            style={
+              {
+                animationDuration: `${edgeAppearance.dotSpacing / edgeAppearance.dotSpeed}s`,
+                "--edge-dot-spacing": `${edgeAppearance.dotSpacing}px`,
+              } as CSSProperties
+            }
+            aria-hidden="true"
+            pointerEvents="none"
+          />
+        </>
+      )}
+    </>
   );
 }
 const edgeTypes = { dependency: DependencyEdge };
@@ -154,20 +224,30 @@ export const Graph = memo(function Graph({
   resizing?: boolean;
   suspended?: boolean;
 }) {
-  const { nodes, routes, failed } = useMemo(() => {
+  const [hovered, setHovered] = useState<{
+    graph: ReviewGraph;
+    direction: Settings["orientation"];
+    kind: "edge" | "node";
+    id: string;
+  } | null>(null);
+  const { nodes, routes, fileBounds, failed } = useMemo(() => {
     try {
       return { ...layoutElements(graph, direction), failed: false };
     } catch {
-      return { nodes: [], routes: [], failed: true };
+      return { nodes: [], routes: [], fileBounds: new Map(), failed: true };
     }
   }, [graph, direction]);
   const selectableNodes = useMemo(
     () =>
-      nodes.map((node) => ({
-        ...node,
-        data: { ...node.data, onSelect: () => onSelect(node.id) },
-        selected: false,
-      })),
+      nodes.map((node) =>
+        node.type === "file"
+          ? {
+              ...node,
+              data: { ...node.data, onSelect: () => onSelect(node.id) },
+              selected: false,
+            }
+          : node,
+      ),
     [nodes, onSelect],
   );
   const displayedNodes = useMemo(
@@ -176,34 +256,57 @@ export const Graph = memo(function Graph({
     [selectableNodes, selected],
   );
   const onNodeClick = useCallback(
-    (_: unknown, node: { id: string }) => onSelect(node.id),
+    (_: unknown, node: { id: string; type?: string }) => {
+      if (node.type === "file") onSelect(node.id);
+    },
     [onSelect],
+  );
+  const focus = hovered?.graph === graph && hovered.direction === direction ? hovered : null;
+  const sourceFans = useMemo(
+    () => edgeFans(graph.merged.edges, fileBounds, direction),
+    [graph, direction, fileBounds],
   );
   const edges = useMemo(
     () =>
-      graph.merged.edges.map((edge, i) => ({
-        ...edge,
-        id: `edge-${i}`,
-        type: "dependency",
-        data: { points: routes[i] },
-        label:
-          edge.status === "unchanged"
-            ? undefined
-            : edge.status === "added"
-              ? "+ added"
-              : "− deleted",
-        className: `edge-${edge.status}`,
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: `var(--${edge.status === "added" ? "green" : edge.status === "deleted" ? "red" : "overlay1"})`,
-        },
-        style: {
-          stroke: `var(--${edge.status === "added" ? "green" : edge.status === "deleted" ? "red" : "overlay1"})`,
-          strokeWidth: 2,
-          strokeDasharray: edge.status === "deleted" ? "6 4" : undefined,
-        },
-      })),
-    [graph, routes],
+      graph.merged.edges.map((edge, i) => {
+        const active =
+          focus?.kind === "edge"
+            ? focus.id === `edge-${i}`
+            : focus?.kind === "node"
+              ? edge.source === focus.id || edge.target === focus.id
+              : selected !== null && (edge.source === selected || edge.target === selected);
+        const muted = (focus !== null || selected !== null) && !active;
+        const color = `var(--${edge.status === "added" ? "green" : edge.status === "deleted" ? "red" : "overlay1"})`;
+        return {
+          ...edge,
+          id: `edge-${i}`,
+          type: "dependency",
+          data: {
+            points: routes[i],
+            direction,
+            sourceFan: sourceFans.source[i],
+            targetFan: sourceFans.target[i],
+            bend: i % 2 === 0 ? 12 : -12,
+            animate: active,
+          },
+          label:
+            edge.status === "unchanged"
+              ? undefined
+              : edge.status === "added"
+                ? "+ added"
+                : "− deleted",
+          className: `edge-${edge.status}${active ? " edge-active" : muted ? " edge-muted" : ""}`,
+          zIndex: active ? 10 : 0,
+          markerEnd: { type: MarkerType.ArrowClosed, color },
+          style: {
+            stroke: color,
+            strokeWidth: active ? edgeAppearance.activeWidth : edgeAppearance.normalWidth,
+            strokeLinecap: "round" as const,
+            strokeDasharray: edge.status === "deleted" ? "6 4" : undefined,
+          },
+        };
+      }),
+    [graph, routes, direction, sourceFans, focus, selected],
   );
   if (failed) {
     return (
@@ -242,12 +345,26 @@ export const Graph = memo(function Graph({
         nodesDraggable={false}
         nodesConnectable={false}
         onNodeClick={onNodeClick}
+        onNodeMouseEnter={(_, node) => {
+          if (node.type === "file") setHovered({ graph, direction, kind: "node", id: node.id });
+        }}
+        onNodeMouseLeave={(_, node) => {
+          setHovered((current) =>
+            current?.kind === "node" && current.id === node.id ? null : current,
+          );
+        }}
+        onEdgeMouseEnter={(_, edge) => setHovered({ graph, direction, kind: "edge", id: edge.id })}
+        onEdgeMouseLeave={(_, edge) => {
+          setHovered((current) =>
+            current?.kind === "edge" && current.id === edge.id ? null : current,
+          );
+        }}
         fitView
         minZoom={0.08}
         maxZoom={2}
       >
         <RevealSelection
-          node={nodes.find((node) => node.id === selected)}
+          node={selected === null ? undefined : fileBounds.get(selected)}
           resizing={resizing}
           suspended={suspended}
         />

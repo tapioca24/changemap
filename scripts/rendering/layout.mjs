@@ -7,7 +7,16 @@ const fixture = renderingFixture(size, shape);
 const start = performance.now();
 try {
   const result = layoutElements(fixture.graph, "LR");
-  assert.equal(result.nodes.length, size);
+  const fileNodes = result.nodes.filter((node) => node.type === "file");
+  const directoryNodes = result.nodes.filter((node) => node.type === "directory");
+  const expectedDirectories = new Set();
+  for (const change of fixture.changes) {
+    const parts = change.newPath.split("/");
+    for (let depth = 1; depth < parts.length; depth++)
+      expectedDirectories.add(parts.slice(0, depth).join("/"));
+  }
+  assert.equal(fileNodes.length, size);
+  assert.equal(directoryNodes.length, expectedDirectories.size);
   assert.equal(result.routes.length, fixture.graph.merged.edges.length);
   assert.ok(
     result.nodes.every(
@@ -25,7 +34,8 @@ try {
     JSON.stringify({
       size,
       shape,
-      nodes: result.nodes.length,
+      nodes: fileNodes.length,
+      directories: directoryNodes.length,
       routes: result.routes.length,
       layoutMs: performance.now() - start,
       maxRssMiB: process.resourceUsage().maxRSS / 1024,

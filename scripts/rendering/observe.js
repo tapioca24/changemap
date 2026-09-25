@@ -4,10 +4,17 @@ window.renderingMeasurement = { started: performance.now() };
 const observer = new MutationObserver(() => {
   const expected = window.renderingExpected;
   if (!expected || window.renderingMeasurement.ready) return;
-  const nodes = document.querySelectorAll(".react-flow__node");
+  const nodes = document.querySelectorAll(".react-flow__node-file");
+  const directories = document.querySelectorAll(".react-flow__node-directory");
   const edges = document.querySelectorAll(".react-flow__edge");
-  if (nodes.length !== expected.nodes || edges.length !== expected.edges) return;
-  if ([...nodes].some((node) => getComputedStyle(node).visibility === "hidden")) return;
+  if (
+    nodes.length !== expected.nodes ||
+    directories.length !== expected.directories ||
+    edges.length !== expected.edges
+  )
+    return;
+  if ([...nodes, ...directories].some((node) => getComputedStyle(node).visibility === "hidden"))
+    return;
   window.renderingMeasurement.ready = true;
   observer.disconnect();
   requestAnimationFrame(() =>

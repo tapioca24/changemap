@@ -176,12 +176,28 @@ p {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.file-node small {
-  font-size: 10px;
-  color: var(--subtext0);
-  white-space: nowrap;
+.directory-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--surface2);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface0) 28%, transparent);
+  pointer-events: none;
+}
+.directory-name {
+  position: absolute;
+  top: 5px;
+  left: 14px;
+  max-width: calc(100% - 28px);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--subtext0);
+  font:
+    600 11px/1.2 "SFMono-Regular",
+    Consolas,
+    monospace;
 }
 .node-status,
 .unresolved {
@@ -209,6 +225,26 @@ p {
 .react-flow__handle {
   background: var(--overlay1);
   border-color: var(--base);
+}
+.react-flow__edge.edge-muted {
+  opacity: 0.12;
+}
+.react-flow__edge.edge-active .react-flow__edge-path {
+  filter: drop-shadow(0 0 3px var(--text));
+}
+.edge-dots {
+  animation: edge-dots linear infinite;
+}
+@keyframes edge-dots {
+  to {
+    stroke-dashoffset: calc(-1 * var(--edge-dot-spacing));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .edge-dots {
+    display: none;
+    animation: none;
+  }
 }
 .canvas-empty {
   position: absolute;

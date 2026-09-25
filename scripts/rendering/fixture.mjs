@@ -1,11 +1,14 @@
 // Deterministic synthetic review; all files changed so the entire graph is visible.
 export function renderingFixture(size, shape = "layered") {
   if (!Number.isInteger(size) || size < 40) throw new Error("Size must be an integer >= 40");
-  if (!["layered", "chain", "hub"].includes(shape)) throw new Error("Unknown graph shape");
+  if (!["layered", "grouped", "chain", "hub"].includes(shape))
+    throw new Error("Unknown graph shape");
   const changes = Array.from({ length: size }, (_, i) => ({
     status: "modified",
-    oldPath: `src/file-${i}.ts`,
-    newPath: `src/file-${i}.ts`,
+    oldPath:
+      shape === "grouped" ? `src/area-${i % 20}/module-${i % 5}/file-${i}.ts` : `src/file-${i}.ts`,
+    newPath:
+      shape === "grouped" ? `src/area-${i % 20}/module-${i % 5}/file-${i}.ts` : `src/file-${i}.ts`,
     oldMode: "100644",
     newMode: "100644",
     binary: false,
@@ -26,7 +29,7 @@ export function renderingFixture(size, shape = "layered") {
       target: `file-${target}`,
       status: "unchanged",
     });
-  if (shape === "layered") {
+  if (shape === "layered" || shape === "grouped") {
     // Ten nodes per layer; forward references avoid turning the benchmark into
     // only a disconnected-node or simple-chain best case.
     for (let i = 0; i < size; i++)
