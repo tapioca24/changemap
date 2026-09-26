@@ -13,7 +13,7 @@ async function main() {
     console.log(`changemap — understand code changes through file dependency maps.
 
 Usage:
-  changemap [target] [compare-with] [--no-open] [--port <number>]
+  changemap [target] [compare-with] [--no-open] [--port <number>] [--editor <command>]
   changemap . | staged | working
   changemap --help
   changemap --version
@@ -30,6 +30,7 @@ Comparisons:
 Options:
   --no-open      Print the URL without opening a browser
   --port <n>     Listen on this port; default 0 selects a free port
+  --editor <cmd> Open files with this editor; defaults to VISUAL, then EDITOR
   -h, --help     Show this help
   -v, --version  Show the package version
 
@@ -60,7 +61,7 @@ Changes are captured until you explicitly refresh. Dependency graphs are planned
       await session.stop();
       return;
     }
-    server = await startServer(session, { port: options.port });
+    server = await startServer(session, { port: options.port, editor: options.editor });
     if (stopping) {
       await server.close();
       return;
