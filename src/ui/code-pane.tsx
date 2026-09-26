@@ -153,6 +153,67 @@ export const defaultDiffDisplay: DiffDisplaySettings = {
   ignoreWhitespace: false,
 };
 
+function CopyPathButton({ path }: { path: string }) {
+  const [result, setResult] = useState<"idle" | "copied" | "error">("idle");
+  useEffect(() => {
+    if (result === "idle") return;
+    const timer = setTimeout(() => setResult("idle"), 2000);
+    return () => clearTimeout(timer);
+  }, [result]);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(path);
+      setResult("copied");
+    } catch {
+      setResult("error");
+    }
+  }
+  return (
+    <span className="path-copy">
+      <button
+        type="button"
+        className={`copy-path-button${result === "copied" ? " copied" : ""}`}
+        aria-label={`Copy ${path}`}
+        title={result === "copied" ? "Copied" : `Copy ${path}`}
+        onClick={() => void copy()}
+      >
+        {result === "copied" ? (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <path d="m5 12 4 4L19 6" />
+          </svg>
+        ) : (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <rect x="8" y="8" width="12" height="12" rx="2" />
+            <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+          </svg>
+        )}
+      </button>
+      {result === "copied" && (
+        <span className="sr-only" role="status">
+          Copied {path}
+        </span>
+      )}
+      {result === "error" && (
+        <span className="copy-path-error" role="alert">
+          コピーできませんでした
+        </span>
+      )}
+    </span>
+  );
+}
+
 function useCodeSide(snapshotId: string, path: string | null, side: Side, load: boolean) {
   const key = JSON.stringify([snapshotId, path, side]);
   const language = codeLanguage(path);
@@ -290,11 +351,17 @@ export function CodePane({
     <aside className="code-pane" aria-label="Code pane">
       <div className="pane-title">
         <span className={`status ${node.status}`}>{statusLabels[node.status]}</span>
-        <h2>{node.newPath ?? node.oldPath}</h2>
+        <div className="path-copy-row">
+          <h2>{node.newPath ?? node.oldPath}</h2>
+          <CopyPathButton path={(node.newPath ?? node.oldPath)!} />
+        </div>
         {node.status === "renamed" && (
-          <p>
-            Renamed from <code>{node.oldPath}</code>
-          </p>
+          <div className="path-copy-row renamed-path">
+            <p>
+              Renamed from <code>{node.oldPath}</code>
+            </p>
+            <CopyPathButton path={node.oldPath!} />
+          </div>
         )}
       </div>
       {!showImage && (
