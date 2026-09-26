@@ -299,6 +299,16 @@ p {
   margin: 8px 0 0;
   overflow-wrap: anywhere;
 }
+.pane-title button {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.pane-title button:disabled {
+  cursor: not-allowed;
+}
+.pane-title [role="alert"] {
+  color: var(--red);
+}
 .code-tabs button {
   font-size: 11px;
   padding: 6px 10px;

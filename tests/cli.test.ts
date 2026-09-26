@@ -19,6 +19,7 @@ test("help describes implemented comparisons, server lifecycle, and options", ()
   expect(result.stdout).toContain("changemap --help");
   expect(result.stdout).toContain("changemap --version");
   expect(result.stdout).toContain("--no-open");
+  expect(result.stdout).toContain("--editor");
   expect(result.stdout).toContain("Ctrl+C");
   expect(result.stdout).toContain("staged");
 });
@@ -37,6 +38,8 @@ test.each([
   ["--port", "-1"],
   ["--port=65536"],
   ["--port=abc"],
+  ["--editor"],
+  ["--editor="],
   ["--pr", "1"],
   ["--unknown"],
   ["--help", "HEAD"],
@@ -55,6 +58,10 @@ test("options default to opening a browser with a free port and support suppress
     open: false,
     port: 4321,
     input: { mode: "working" },
+  });
+  expect(parseOptions(["working", "--editor", "vim -p"])).toMatchObject({
+    command: "review",
+    editor: "vim -p",
   });
 });
 
