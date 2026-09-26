@@ -17,7 +17,9 @@ export interface ModuleReference {
     | "import-type"
     | "import-equals"
     | "dynamic-import"
-    | "require";
+    | "require"
+    | "symbol"
+    | "build-constraint";
   readonly line: number;
   readonly column: number;
   readonly expression: string;
@@ -37,6 +39,13 @@ export interface DependencyGraph {
   readonly edges: readonly FileDependency[];
   readonly references: readonly ModuleReference[];
   readonly diagnostics: readonly AnalysisDiagnostic[];
+  readonly go?: {
+    readonly os: string;
+    readonly arch: string;
+    readonly tags: readonly string[];
+    readonly version: string;
+    readonly cgo: boolean;
+  };
 }
 
 export interface ReviewGraph {

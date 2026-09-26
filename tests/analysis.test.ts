@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import * as analysis from "../src/analysis/typescript.js";
+import * as analysis from "../src/analysis/pipeline.js";
 import { analyzeTypeScript } from "../src/analysis/typescript.js";
 import { selectNeighborhood } from "../src/graph/select.js";
 import { SnapshotSource } from "../src/git/snapshot.js";
@@ -310,7 +310,7 @@ describe("snapshot integration", () => {
     const session = await ReviewSession.create(source);
     const original = session.snapshot;
     await repo.write("a.ts", "export {};");
-    const failing = vi.spyOn(analysis, "analyzeTypeScript").mockImplementation(() => {
+    const failing = vi.spyOn(analysis, "analyzeSnapshot").mockImplementation(() => {
       throw new Error("analysis fixture failure");
     });
     try {

@@ -31,11 +31,14 @@ Options:
   --no-open      Print the URL without opening a browser
   --port <n>     Listen on this port; default 0 selects a free port
   --editor <cmd> Open files with this editor; defaults to VISUAL, then EDITOR
+  --go-os <os>   Go target OS; default is the host OS
+  --go-arch <a>  Go target architecture; default is the host architecture
+  --go-tags <t>  Comma-separated Go build tags; default is none (cgo disabled)
   -h, --help     Show this help
   -v, --version  Show the package version
 
 The server listens on 127.0.0.1. Press Ctrl+C to stop it.
-Changes are captured until you explicitly refresh. Dependency graphs are planned.`);
+Changes are captured until you explicitly refresh. Go analysis requires Go on PATH.`);
     return;
   }
   if (options.command === "version") {
@@ -56,7 +59,9 @@ Changes are captured until you explicitly refresh. Dependency graphs are planned
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
   try {
-    session = await ReviewSession.create(new SnapshotSource(repository, options.input));
+    session = await ReviewSession.create(
+      new SnapshotSource(repository, options.input, { go: options.go }),
+    );
     if (stopping) {
       await session.stop();
       return;

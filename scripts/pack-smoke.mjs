@@ -42,6 +42,9 @@ async function testServer(installed) {
   writeFileSync(join(temporary, "example.ts"), "import 'target';\nexport const value = 1;\n");
   writeFileSync(join(temporary, "dependency.ts"), "export {};\n");
   writeFileSync(join(temporary, "alternate.ts"), "export {};\n");
+  writeFileSync(join(temporary, "go.mod"), "module example.com/packed\ngo 1.24\n");
+  writeFileSync(join(temporary, "main.go"), "package packed\nfunc Run() { Value() }\n");
+  writeFileSync(join(temporary, "value.go"), "package packed\nfunc Value() {}\n");
   writeFileSync(
     join(temporary, "tsconfig.json"),
     JSON.stringify({ compilerOptions: { paths: { target: ["./dependency.ts"] } } }),
@@ -50,7 +53,7 @@ async function testServer(installed) {
   // server child directly on all three OSes, without an intermediate pnpm process.
   const child = spawn(
     process.execPath,
-    [join(installed, metadata.bin.changemap), ".", "--no-open"],
+    [join(installed, metadata.bin.changemap), ".", "--no-open", "--go-os=linux", "--go-arch=amd64"],
     {
       cwd: temporary,
       env: { ...process.env, XDG_CONFIG_HOME: join(temporary, ".git", "config-home") },
@@ -67,7 +70,7 @@ async function testServer(installed) {
     const url = await new Promise((resolve, reject) => {
       const timer = setTimeout(
         () => reject(new Error(`Server startup timed out: ${stderr}`)),
-        15_000,
+        120_000,
       );
       child.stdout.on("data", (data) => {
         stdout += data.toString();
@@ -109,10 +112,14 @@ async function testServer(installed) {
     assert.ok(snapshot.changes.some((change) => change.newPath === "example.ts"));
     assert.deepEqual(snapshot.graph.after.edges, [
       { source: "example.ts", target: "dependency.ts" },
+      { source: "main.go", target: "value.go" },
     ]);
     assert.deepEqual(snapshot.graph.merged.edges, [
       { source: "after:example.ts", target: "after:dependency.ts", status: "added" },
+      { source: "after:main.go", target: "after:value.go", status: "added" },
     ]);
+    assert.equal(snapshot.graph.after.go.os, "linux");
+    assert.equal(snapshot.graph.after.go.arch, "amd64");
     assert.equal(snapshot.graph.incomplete, false);
     writeFileSync(join(temporary, "example.ts"), "import 'target';\nexport const value = 2;\n");
     writeFileSync(
@@ -134,9 +141,11 @@ async function testServer(installed) {
     assert.notEqual(refreshed.id, snapshot.id);
     assert.deepEqual(refreshed.graph.merged.edges, [
       { source: "after:example.ts", target: "after:alternate.ts", status: "added" },
+      { source: "after:main.go", target: "after:value.go", status: "added" },
     ]);
     assert.deepEqual(refreshed.graph.after.edges, [
       { source: "example.ts", target: "alternate.ts" },
+      { source: "main.go", target: "value.go" },
     ]);
     const updated = await fetch(
       `${url}/api/file?side=after&path=example.ts&snapshot=${refreshed.id}`,
@@ -188,7 +197,8 @@ try {
     assert.equal(existsSync(join(temporary, "node_modules", dependency)), false);
     assert.equal(existsSync(join(installed, "node_modules", dependency)), false);
   }
-  assert.deepEqual(readdirSync(join(installed, "dist")).sort(), ["cli.mjs", "ui"]);
+  assert.deepEqual(readdirSync(join(installed, "dist")).sort(), ["cli.mjs", "go-helper", "ui"]);
+  assert.ok(existsSync(join(installed, "dist", "go-helper", "main.go")));
   assert.ok(existsSync(join(installed, "dist", "ui", ".vite", "license.md")));
   // pnpm exec resolves the installed bin shim, including changemap.cmd on Windows.
   const help = runPnpm(["exec", "changemap", "--help"], temporary);
