@@ -96,15 +96,15 @@ async function testServer(installed) {
     }
     const config = join(temporary, ".git", "config-home", "changemap", "config.toml");
     const settings = await fetch(`${url}/api/settings`).then((response) => response.json());
-    assert.deepEqual(settings.settings, { theme: "mocha", orientation: "LR" });
+    assert.deepEqual(settings.settings, { theme: "catppuccin-mocha", orientation: "LR" });
     assert.equal(existsSync(config), false);
     const saved = await fetch(`${url}/api/settings`, {
       method: "POST",
       headers: { "X-Changemap-Request": "1", "Content-Type": "application/json" },
-      body: JSON.stringify({ theme: "latte", orientation: "BT" }),
+      body: JSON.stringify({ theme: "catppuccin-latte", orientation: "BT" }),
     }).then((response) => response.json());
     assert.equal(saved.warning, null);
-    assert.match(readFileSync(config, "utf8"), /theme = "latte"/);
+    assert.match(readFileSync(config, "utf8"), /theme = "catppuccin-latte"/);
     const snapshot = await fetch(`${url}/api/snapshot`).then((response) => response.json());
     assert.ok(snapshot.changes.some((change) => change.newPath === "example.ts"));
     assert.deepEqual(snapshot.graph.after.edges, [
@@ -178,7 +178,11 @@ try {
     readdirSync(installed)
       .filter((name) => name !== "node_modules")
       .sort(),
-    ["LICENSE", "README.md", "dist", "package.json"],
+    ["LICENSE", "README.md", "THIRD_PARTY_THEME_NOTICES.md", "dist", "package.json"],
+  );
+  assert.match(
+    readFileSync(join(installed, "THIRD_PARTY_THEME_NOTICES.md"), "utf8"),
+    /## Tokyo Night[\s\S]*## Rosé Pine[\s\S]*## Vitesse[\s\S]*## Kanagawa[\s\S]*## Everforest/,
   );
   for (const dependency of Object.keys(metadata.devDependencies)) {
     assert.equal(existsSync(join(temporary, "node_modules", dependency)), false);

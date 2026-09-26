@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
 import { SettingsStore, configPath } from "../src/config/settings.js";
-import { defaults } from "../src/shared/settings.js";
+import { defaults, themes } from "../src/shared/settings.js";
 const roots: string[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -29,17 +29,22 @@ test("startup creates nothing; first change saves and restart restores settings"
   const store = await SettingsStore.load(path);
   expect(store.state.settings).toEqual(defaults);
   expect(await readdir(root)).toEqual([]);
-  expect(await store.save({ theme: "latte", orientation: "BT" })).toEqual({
-    settings: { theme: "latte", orientation: "BT" },
+  expect(await store.save({ theme: "everforest-light-medium", orientation: "BT" })).toEqual({
+    settings: { theme: "everforest-light-medium", orientation: "BT" },
     warning: null,
   });
   expect((await SettingsStore.load(path)).state.settings).toEqual({
-    theme: "latte",
+    theme: "everforest-light-medium",
     orientation: "BT",
   });
   expect(await readdir(root)).toEqual(["config.toml"]);
 });
-test.each(["theme = [", 'theme = "unknown"'])(
+test.each(themes)("theme %s survives a settings store restart", async (theme) => {
+  const { path } = await fixture();
+  await (await SettingsStore.load(path)).save({ theme, orientation: "LR" });
+  expect((await SettingsStore.load(path)).state.settings.theme).toBe(theme);
+});
+test.each(["theme = [", 'theme = "unknown"', 'theme = "mocha"'])(
   "malformed settings are preserved: %s",
   async (text) => {
     const { path } = await fixture();
@@ -47,35 +52,35 @@ test.each(["theme = [", 'theme = "unknown"'])(
     const store = await SettingsStore.load(path);
     expect(store.state.warning).toContain("could not be loaded");
     expect(store.state.settings).toEqual(defaults);
-    expect((await store.save({ theme: "frappe", orientation: "RL" })).settings.theme).toBe(
-      "frappe",
-    );
+    expect(
+      (await store.save({ theme: "catppuccin-frappe", orientation: "RL" })).settings.theme,
+    ).toBe("catppuccin-frappe");
     expect(await readFile(path, "utf8")).toBe(text);
   },
 );
 test("failed save preserves the old file and applies session settings", async () => {
   const { path } = await fixture();
-  await writeFile(path, 'theme = "mocha"\n');
+  await writeFile(path, 'theme = "catppuccin-mocha"\n');
   const store = await SettingsStore.load(path);
   // Rename over a nonempty directory must fail even when tests run as root.
   await rm(path);
   await mkdir(path);
   await writeFile(join(path, "original"), "preserve");
-  expect((await store.save({ theme: "latte", orientation: "TB" })).warning).toContain(
+  expect((await store.save({ theme: "catppuccin-latte", orientation: "TB" })).warning).toContain(
     "could not be saved",
   );
-  expect(store.state.settings.theme).toBe("latte");
+  expect(store.state.settings.theme).toBe("catppuccin-latte");
   expect(await readFile(join(path, "original"), "utf8")).toBe("preserve");
 });
 test("corruption after startup is preserved and queued saves finish in order", async () => {
   const { path } = await fixture();
   const store = await SettingsStore.load(path);
   await Promise.all([
-    store.save({ theme: "latte", orientation: "TB" }),
-    store.save({ theme: "macchiato", orientation: "RL" }),
+    store.save({ theme: "catppuccin-latte", orientation: "TB" }),
+    store.save({ theme: "catppuccin-macchiato", orientation: "RL" }),
   ]);
   expect((await SettingsStore.load(path)).state.settings).toEqual({
-    theme: "macchiato",
+    theme: "catppuccin-macchiato",
     orientation: "RL",
   });
   await writeFile(path, "broken = [");

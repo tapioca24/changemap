@@ -53,7 +53,7 @@
     .sort();
   const theme = document.querySelector("select");
   const originalTheme = theme.value;
-  for (const value of ["mocha", "latte"]) {
+  for (const value of ["catppuccin-mocha", "catppuccin-latte"]) {
     theme.value = value;
     theme.dispatchEvent(new Event("change", { bubbles: true }));
     await paint();
@@ -86,5 +86,5 @@
   theme.value = originalTheme;
   theme.dispatchEvent(new Event("change", { bubbles: true }));
   await paint();
-  return { statuses, themes: ["mocha", "latte"], selectionRestored: true };
+  return { statuses, themes: ["catppuccin-mocha", "catppuccin-latte"], selectionRestored: true };
 })();

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { App } from "../src/ui/app.js";
 import type { ReviewSummary, ReviewStatus } from "../src/shared/review.js";
 import type { Settings } from "../src/shared/settings.js";
+import { themes } from "../src/shared/settings.js";
 import type { ReviewGraph } from "../src/graph/model.js";
 
 // Canvas geometry is tested separately and measured in Chromium. Keep the real
@@ -108,7 +109,10 @@ function api(initial: ReviewSummary) {
           if (state.saveFailure) return response({ error: "Disk full" }, 500);
           return response({ settings, warning: null });
         }
-        return response({ settings: { theme: "mocha", orientation: "LR" }, warning: null });
+        return response({
+          settings: { theme: "catppuccin-mocha", orientation: "LR" },
+          warning: null,
+        });
       }
       if (url === "/api/refresh") {
         if (state.failure) return response({ error: "Comparison ref missing" }, 503);
@@ -193,7 +197,12 @@ test("theme and direction remain applied after failed saves and review continues
   await waitFor(() =>
     expect((screen.getByLabelText("Theme") as HTMLSelectElement).disabled).toBe(false),
   );
-  for (const theme of ["latte", "frappe", "macchiato", "mocha"]) {
+  for (const theme of [
+    "catppuccin-latte",
+    "catppuccin-frappe",
+    "catppuccin-macchiato",
+    "catppuccin-mocha",
+  ]) {
     fireEvent.change(screen.getByLabelText("Theme"), { target: { value: theme } });
     expect(container.querySelector(".app")?.getAttribute("data-theme")).toBe(theme);
   }
@@ -203,9 +212,26 @@ test("theme and direction remain applied after failed saves and review continues
   }
   expect(await screen.findByText(/Settings could not be saved/)).toBeTruthy();
   expect(state.saved).toHaveLength(8);
-  expect(state.saved.at(-1)).toEqual({ theme: "mocha", orientation: "LR" });
+  expect(state.saved.at(-1)).toEqual({ theme: "catppuccin-mocha", orientation: "LR" });
   fireEvent.click(screen.getByText("Open file.ts"));
   expect(addedCode()).toContain("one");
+});
+
+test("all bundled themes appear in the existing selector and update the whole app", async () => {
+  api(snapshot("one", "file.ts"));
+  const { container } = render(createElement(App));
+  await waitFor(() =>
+    expect((screen.getByLabelText("Theme") as HTMLSelectElement).disabled).toBe(false),
+  );
+  const selector = screen.getByLabelText("Theme") as HTMLSelectElement;
+  expect([...selector.options].map((option) => option.value)).toEqual(themes);
+  for (const theme of themes.slice(4)) {
+    fireEvent.change(selector, { target: { value: theme } });
+    const app = container.querySelector<HTMLElement>(".app");
+    expect(app?.dataset.theme).toBe(theme);
+    expect(app?.style.getPropertyValue("--base")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(app?.style.getPropertyValue("--text")).toMatch(/^#[0-9a-f]{6}$/);
+  }
 });
 
 test("selection survives refresh with updated code, then closes when the file disappears", async () => {
