@@ -5,7 +5,7 @@ Understand code changes through file dependency maps.
 Review local Git changes in your browser. See which TypeScript files depend on
 changed code, follow added or removed dependencies, and read diffs alongside the map.
 
-![A sample checkout change: checkout.ts switches from legacy-discount.ts to discount.ts, with the dependency map beside its diff.](https://raw.githubusercontent.com/tapioca24/changemap/main/.github/assets/changemap.png)
+![Current review screen: checkout.ts switches from legacy-discount.ts to discount.ts, with added and deleted dependencies beside its code diff.](https://raw.githubusercontent.com/tapioca24/changemap/main/.github/assets/changemap.png)
 
 ## Quick start
 
@@ -61,20 +61,13 @@ npx changemap --help
 - Changed TypeScript files appear with their direct dependencies and direct users
   from both sides of the comparison. Arrows point from the referencing file to
   its target. The map does not recursively expand the whole project.
-- File labels show added, modified, deleted, renamed, or unchanged status.
-  Added dependencies have a `+ added` label; removed dependencies have a
-  `− deleted` label and a dashed line.
-- Select a file to switch between **Diff**, **Before · full file**, and
-  **After · full file**, where available. Other changed files are listed under
-  **Outside dependency analysis**. Binary files have no text preview.
-- Select **Open in editor** in the code pane to open the file currently in the
-  working tree. This also works for unchanged dependency files. Historical or
-  staged contents may differ from the working tree; the pane points out a
-  difference. Files absent from the working tree cannot be opened.
-- Pan, zoom, or fit the map to explore it. File buttons also work with Enter or Space.
-- When files change, an update notice appears. Choose **Refresh comparison** to
-  replace the captured map and code. Until then, what you are reviewing stays
-  fixed. A failed refresh keeps the previous comparison.
+- Other changed files remain accessible under **Outside dependency analysis**.
+  PNG, JPEG, GIF, and WebP files show before/after image previews where available;
+  other binary files have no preview. The usage guide below lists preview limits.
+- **Ignore whitespace** changes only the displayed diff, not file statuses or
+  the dependency map.
+- The map and code stay fixed after capture. When files change, use **Refresh
+  comparison** to replace them; a failed refresh keeps the previous comparison.
 
 ### Open files in an editor
 
@@ -83,7 +76,7 @@ them for one run. The file path is appended as the last argument. Quote an
 executable path containing spaces. Commands run without a shell.
 
 ```sh
-changemap . --editor "code --reuse-window"
+npx changemap . --editor "code --reuse-window"
 ```
 
 Terminal editors such as `vim` open in the terminal where changemap was
