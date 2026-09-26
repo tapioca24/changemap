@@ -21,7 +21,7 @@ for (const node of fixture.graph.merged.nodes) {
   }
 }
 const session = `changemap-benchmark-${process.pid}`;
-let settings = { theme: "mocha", orientation: "LR" };
+let settings = { theme: "catppuccin-mocha", orientation: "LR" };
 const server = createServer(async (req, res) => {
   try {
     const path = new URL(req.url, "http://localhost").pathname;
@@ -134,7 +134,7 @@ try {
       const selectMs = performance.now() - start;
       start = performance.now();
       const select = document.querySelector('select');
-      select.value = i % 2 ? 'mocha' : 'latte';
+      select.value = i % 2 ? 'catppuccin-mocha' : 'catppuccin-latte';
       select.dispatchEvent(new Event('change', { bubbles: true }));
       await paint();
       if (document.querySelector('.app').dataset.theme !== select.value) throw Error('Theme did not change');

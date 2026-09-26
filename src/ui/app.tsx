@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { flavors } from "@catppuccin/palette";
+import { useEffect, useRef, useState } from "react";
 import type { ReviewStatus, ReviewSummary } from "../shared/review.js";
 import {
   defaults,
@@ -9,6 +8,7 @@ import {
   type SettingsState,
 } from "../shared/settings.js";
 import { request } from "./api.js";
+import { isLightTheme, themeName, themeStyle } from "./themes.js";
 import { Workspace } from "./workspace.js";
 import "./style.css";
 
@@ -121,12 +121,13 @@ export function App() {
       ↻
     </button>
   );
-  const palette = flavors[settings.theme];
-  const style = Object.fromEntries(
-    palette.colorEntries.map(([name, color]) => [`--${name}`, color.hex]),
-  ) as CSSProperties;
   return (
-    <div className="app" style={style} data-theme={settings.theme}>
+    <div
+      className="app"
+      style={themeStyle(settings.theme)}
+      data-theme={settings.theme}
+      data-color-scheme={isLightTheme(settings.theme) ? "light" : "dark"}
+    >
       <header className="topbar">
         <a className="wordmark" href="/">
           ↗ changemap
@@ -147,7 +148,7 @@ export function App() {
             >
               {themes.map((theme) => (
                 <option key={theme} value={theme}>
-                  {flavors[theme].name}
+                  {themeName(theme)}
                 </option>
               ))}
             </select>

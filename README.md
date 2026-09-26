@@ -93,8 +93,11 @@ temporary copy of the captured comparison.
 
 ## Settings
 
-Choose a theme and map direction in the toolbar. The four themes are Latte,
-Frappé, Macchiato, and Mocha (default); the default direction is left to right.
+Choose a theme and map direction in the toolbar. The 24 themes include Catppuccin
+(Latte, Frappé, Macchiato, and Mocha), Tokyo Night, Rosé Pine, Vitesse, Kanagawa,
+and Everforest variants. Mocha remains the default; the default direction is left
+to right. The additional palettes are bundled with changemap and do not update
+automatically. See [theme sources and licenses](THIRD_PARTY_THEME_NOTICES.md).
 Settings are shared across projects and saved on the first UI setting change.
 
 The configuration file is `$XDG_CONFIG_HOME/changemap/config.toml` when
@@ -102,9 +105,20 @@ The configuration file is `$XDG_CONFIG_HOME/changemap/config.toml` when
 on all supported platforms.
 
 ```toml
-theme = "mocha" # latte | frappe | macchiato | mocha
+theme = "catppuccin-mocha" # e.g. tokyo-night-light, rose-pine-dawn, kanagawa-wave
 orientation = "LR" # LR | TB | RL | BT
 ```
+
+For manual configuration, the theme values are:
+
+| Family      | Values                                                                                                                                                |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Catppuccin  | `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `catppuccin-mocha`                                                                   |
+| Tokyo Night | `tokyo-night`, `tokyo-night-storm`, `tokyo-night-light`                                                                                               |
+| Rosé Pine   | `rose-pine`, `rose-pine-moon`, `rose-pine-dawn`                                                                                                       |
+| Vitesse     | `vitesse-black`, `vitesse-dark`, `vitesse-dark-soft`, `vitesse-light`, `vitesse-light-soft`                                                           |
+| Kanagawa    | `kanagawa-wave`, `kanagawa-dragon`, `kanagawa-lotus`                                                                                                  |
+| Everforest  | `everforest-dark-hard`, `everforest-dark-medium`, `everforest-dark-soft`, `everforest-light-hard`, `everforest-light-medium`, `everforest-light-soft` |
 
 ## Important limits
 

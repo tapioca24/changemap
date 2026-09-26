@@ -14,6 +14,7 @@
   "files": [
     "dist",
     "README.md",
+    "THIRD_PARTY_THEME_NOTICES.md",
     "LICENSE"
   ],
   "type": "module",

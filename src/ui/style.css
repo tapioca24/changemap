@@ -39,7 +39,7 @@ button[aria-pressed="true"] {
   background: var(--surface1);
   border-color: var(--lavender);
 }
-.app[data-theme="latte"] {
+.app[data-color-scheme="light"] {
   color-scheme: light;
 }
 .app {
