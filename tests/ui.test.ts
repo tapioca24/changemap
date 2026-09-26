@@ -252,12 +252,119 @@ test("display controls switch split rows and whitespace patch while full files r
 test("deleted files start with old contents, and binary files explain unavailable text", async () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response(JSON.stringify({ encoding: "base64", content: "AA==" }))),
+    vi.fn(
+      async () =>
+        new Response(null, {
+          status: 415,
+          headers: { "X-Changemap-Preview-Reason": "Unsupported or invalid image format." },
+        }),
+    ),
   );
-  const node = { ...file("deleted.bin"), status: "deleted" as const, newPath: null };
+  const original = file("deleted.bin");
+  const node = {
+    ...original,
+    status: "deleted" as const,
+    newPath: null,
+    change: { ...original.change!, binary: true, patch: null },
+  };
   render(createElement(CodePane, { snapshot, node }));
-  expect(await screen.findByText(/Text diff unavailable/)).toBeTruthy();
+  expect(await screen.findByText(/Unsupported or invalid image format/)).toBeTruthy();
   expect(screen.queryByText("After · full file")).toBeNull();
+});
+
+test("binary diff previews an available side and explains why the other side is unavailable", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: string, options?: RequestInit) => {
+      if (options?.method === "HEAD" && String(_url).includes("side=before")) {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            "Content-Type": "image/png",
+            "X-Changemap-Image-Width": "32",
+            "X-Changemap-Image-Height": "16",
+          },
+        });
+      }
+      return new Response(null, {
+        status: 413,
+        headers: {
+          "X-Changemap-Preview-Reason": "Image exceeds the 10 MiB preview limit.",
+        },
+      });
+    }),
+  );
+  const original = file("picture.bin");
+  const node = { ...original, change: { ...original.change!, binary: true, patch: null } };
+  render(createElement(CodePane, { snapshot, node }));
+  const image = await screen.findByAltText("Before file preview");
+  expect(image.getAttribute("src")).toContain("side=before");
+  expect(screen.getByText("32 × 16 px")).toBeTruthy();
+  expect(screen.getByText(/10 MiB preview limit/)).toBeTruthy();
+  expect(screen.queryByLabelText("Display settings")).toBeNull();
+  fireEvent.click(screen.getByText("Before · full file"));
+  expect(screen.getByAltText("Before file preview")).toBeTruthy();
+  expect(screen.queryByText(/10 MiB preview limit/)).toBeNull();
+  fireEvent.error(screen.getByAltText("Before file preview"));
+  expect(screen.getByText("The browser could not decode this image.")).toBeTruthy();
+  fireEvent.click(screen.getByText("After · full file"));
+  expect(screen.getByText(/10 MiB preview limit/)).toBeTruthy();
+});
+
+test("clicking a preview opens an enlarged dialog and returns focus when closed", async () => {
+  const showDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "showModal");
+  const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "close");
+  Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    },
+  });
+  Object.defineProperty(HTMLDialogElement.prototype, "close", {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.removeAttribute("open");
+      this.dispatchEvent(new Event("close"));
+    },
+  });
+  try {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(null, {
+            status: 200,
+            headers: {
+              "Content-Type": "image/png",
+              "X-Changemap-Image-Width": "64",
+              "X-Changemap-Image-Height": "32",
+            },
+          }),
+      ),
+    );
+    const original = file("picture.bin");
+    const node = { ...original, change: { ...original.change!, binary: true, patch: null } };
+    render(createElement(CodePane, { snapshot, node }));
+    const trigger = await screen.findByRole("button", { name: "Enlarge Before image" });
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "Before image enlarged" });
+    expect(dialog.querySelector("img")?.getAttribute("src")).toContain("side=before");
+    expect(dialog.textContent).toContain("64 × 32 px");
+    fireEvent.click(screen.getByRole("button", { name: "Close ×" }));
+    expect(screen.queryByRole("dialog", { name: "Before image enlarged" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("dialog", { name: "Before image enlarged" }));
+    expect(screen.queryByRole("dialog", { name: "Before image enlarged" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  } finally {
+    if (showDescriptor)
+      Object.defineProperty(HTMLDialogElement.prototype, "showModal", showDescriptor);
+    else delete (HTMLDialogElement.prototype as { showModal?: unknown }).showModal;
+    if (closeDescriptor)
+      Object.defineProperty(HTMLDialogElement.prototype, "close", closeDescriptor);
+    else delete (HTMLDialogElement.prototype as { close?: unknown }).close;
+  }
 });
 test("rename paths and unresolved vs intentionally excluded references remain distinct", () => {
   const node = { ...file("a.ts"), status: "renamed" as const, newPath: "renamed.ts" };

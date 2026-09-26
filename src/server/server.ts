@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { ReviewSession } from "../review/session.js";
 import { SettingsStore } from "../config/settings.js";
 import { validSettings } from "../shared/settings.js";
+import { inspectImage } from "./image-preview.js";
 
 export interface LocalServer {
   url: string;
@@ -28,6 +29,7 @@ export async function startServer(
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Referrer-Policy", "no-referrer");
+    response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
     response.setHeader(
       "Content-Security-Policy",
       "default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
@@ -73,6 +75,38 @@ export async function startServer(
         json(response, 200, session.snapshot.summary);
       } else if (request.method === "GET" && url.pathname === "/api/status") {
         json(response, 200, session.status);
+      } else if (
+        (request.method === "GET" || request.method === "HEAD") &&
+        url.pathname === "/api/image"
+      ) {
+        const snapshot = session.snapshot;
+        const side = url.searchParams.get("side");
+        const path = url.searchParams.get("path");
+        const fail = (status: number, reason: string) => {
+          response.setHeader("X-Changemap-Preview-Reason", reason);
+          if (request.method === "HEAD") response.writeHead(status).end();
+          else json(response, status, { error: reason });
+        };
+        if (url.searchParams.get("snapshot") !== snapshot.summary.id) {
+          fail(409, "This snapshot is no longer available. Refresh to use the current comparison.");
+        } else if ((side !== "before" && side !== "after") || path === null) {
+          fail(400, "Specify side=before|after and path.");
+        } else if (!Object.hasOwn(snapshot[side].files, path)) {
+          fail(404, "File is absent from this captured state.");
+        } else {
+          const image = inspectImage(snapshot[side].files[path]);
+          if (!image.ok) {
+            fail(image.status, image.reason);
+          } else {
+            response.writeHead(200, {
+              "Content-Type": image.mime,
+              "Content-Length": image.bytes.length,
+              "X-Changemap-Image-Width": image.width,
+              "X-Changemap-Image-Height": image.height,
+            });
+            response.end(request.method === "HEAD" ? undefined : image.bytes);
+          }
+        }
       } else if (request.method === "GET" && url.pathname === "/api/file") {
         const snapshot = session.snapshot;
         const side = url.searchParams.get("side");

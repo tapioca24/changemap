@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MergedFileNode } from "../graph/model.js";
 import type { CapturedFile, ReviewSummary } from "../shared/review.js";
 import { request } from "./api.js";
@@ -9,6 +9,139 @@ import { highlightFile } from "./highlight-client.js";
 import type { CodeToken, TokenLines } from "./highlight-engine.js";
 
 type Side = "before" | "after";
+type ImageState =
+  | { key: string; ok: true; width: number; height: number; url: string }
+  | { key: string; ok: false; reason: string };
+
+function useImageSide(snapshotId: string, path: string | null, side: Side) {
+  const key = JSON.stringify([snapshotId, path, side]);
+  const [state, setState] = useState<ImageState | null>(null);
+  const current = state?.key === key ? state : null;
+  useEffect(() => {
+    if (!path || current) return;
+    let disposed = false;
+    const url = `/api/image?${new URLSearchParams({ snapshot: snapshotId, path, side })}`;
+    fetch(url, { method: "HEAD", headers: { "X-Changemap-Request": "1" } })
+      .then((response) => {
+        if (disposed) return;
+        if (!response.ok) {
+          setState({
+            key,
+            ok: false,
+            reason:
+              response.headers.get("X-Changemap-Preview-Reason") ??
+              `Preview unavailable (${response.status}).`,
+          });
+          return;
+        }
+        const mime = response.headers.get("Content-Type");
+        const width = Number(response.headers.get("X-Changemap-Image-Width"));
+        const height = Number(response.headers.get("X-Changemap-Image-Height"));
+        if (
+          !mime ||
+          !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(mime) ||
+          !width ||
+          !height
+        ) {
+          setState({ key, ok: false, reason: "Invalid image preview response." });
+          return;
+        }
+        setState({
+          key,
+          ok: true,
+          width,
+          height,
+          url,
+        });
+      })
+      .catch((error: Error) => {
+        if (!disposed) setState({ key, ok: false, reason: error.message });
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [key, path, side, snapshotId, current]);
+  return current;
+}
+
+function ImageCard({ side, state }: { side: Side; state: ImageState | null }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const [enlarged, setEnlarged] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const label = side === "before" ? "Before" : "After";
+  useEffect(() => {
+    if (enlarged && !dialogRef.current?.open) dialogRef.current?.showModal();
+  }, [enlarged]);
+  function closeEnlarged() {
+    dialogRef.current?.close();
+  }
+  return (
+    <section className="image-card" aria-label={`${label} image preview`}>
+      <div className="image-card-heading">
+        <strong>{label}</strong>
+        {state?.ok && (
+          <span>
+            {state.width.toLocaleString()} × {state.height.toLocaleString()} px
+          </span>
+        )}
+      </div>
+      {!state ? (
+        <p role="status" className="image-card-note">
+          Checking image…
+        </p>
+      ) : !state.ok ? (
+        <p className="image-card-note">{state.reason}</p>
+      ) : failedUrl === state.url ? (
+        <p className="image-card-note">The browser could not decode this image.</p>
+      ) : (
+        <>
+          <button
+            ref={buttonRef}
+            type="button"
+            className="image-open"
+            aria-label={`Enlarge ${label} image`}
+            aria-haspopup="dialog"
+            onClick={() => setEnlarged(true)}
+          >
+            <img
+              src={state.url}
+              alt={`${label} file preview`}
+              onError={() => setFailedUrl(state.url)}
+            />
+          </button>
+          {enlarged && (
+            <dialog
+              ref={dialogRef}
+              className="image-lightbox"
+              aria-label={`${label} image enlarged`}
+              onClick={(event) => {
+                if (event.target === event.currentTarget) closeEnlarged();
+              }}
+              onClose={() => {
+                setEnlarged(false);
+                buttonRef.current?.focus();
+              }}
+            >
+              <div className="image-lightbox-content">
+                <div className="image-lightbox-heading">
+                  <strong>{label} image</strong>
+                  <span>
+                    {state.width.toLocaleString()} × {state.height.toLocaleString()} px
+                  </span>
+                  <button type="button" autoFocus onClick={closeEnlarged}>
+                    Close ×
+                  </button>
+                </div>
+                <img src={state.url} alt={`${label} image enlarged`} />
+              </div>
+            </dialog>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
 
 export interface DiffDisplaySettings {
   layout: "unified" | "split";
@@ -109,20 +242,25 @@ export function CodePane({
   const [mode, setMode] = useState<"diff" | "before" | "after">(
     node.status === "deleted" ? "before" : node.status === "unchanged" ? "after" : "diff",
   );
+  const beforeImage = useImageSide(snapshot.id, node.oldPath, "before");
+  const afterImage = useImageSide(snapshot.id, node.newPath, "after");
   const before = useCodeSide(
     snapshot.id,
     node.oldPath,
     "before",
-    mode === "before" || (mode === "diff" && !!node.change?.patch && !!codeLanguage(node.oldPath)),
+    (mode === "before" && !node.change?.binary && !beforeImage?.ok) ||
+      (mode === "diff" && !!node.change?.patch && !!codeLanguage(node.oldPath)),
   );
   const after = useCodeSide(
     snapshot.id,
     node.newPath,
     "after",
-    mode === "after" || (mode === "diff" && !!node.change?.patch && !!codeLanguage(node.newPath)),
+    (mode === "after" && !node.change?.binary && !afterImage?.ok) ||
+      (mode === "diff" && !!node.change?.patch && !!codeLanguage(node.newPath)),
   );
   const selected = mode === "before" ? before : after;
   const current = selected.current;
+  const showImage = node.change?.binary || beforeImage?.ok || afterImage?.ok;
   const binary = mode === "diff" ? node.change?.binary : current?.file?.encoding === "base64";
   const text =
     mode === "diff"
@@ -159,32 +297,34 @@ export function CodePane({
           </p>
         )}
       </div>
-      <div className="display-settings" role="group" aria-label="Display settings">
-        <span>DISPLAY</span>
-        <button
-          type="button"
-          aria-label="Split diff"
-          aria-pressed={display.layout === "split"}
-          onClick={() =>
-            onDisplayChange?.({
-              ...display,
-              layout: display.layout === "split" ? "unified" : "split",
-            })
-          }
-        >
-          {display.layout === "split" ? "Split" : "Unified"}
-        </button>
-        <label>
-          <input
-            type="checkbox"
-            checked={display.ignoreWhitespace}
-            onChange={(event) =>
-              onDisplayChange?.({ ...display, ignoreWhitespace: event.target.checked })
+      {!showImage && (
+        <div className="display-settings" role="group" aria-label="Display settings">
+          <span>DISPLAY</span>
+          <button
+            type="button"
+            aria-label="Split diff"
+            aria-pressed={display.layout === "split"}
+            onClick={() =>
+              onDisplayChange?.({
+                ...display,
+                layout: display.layout === "split" ? "unified" : "split",
+              })
             }
-          />
-          Ignore whitespace
-        </label>
-      </div>
+          >
+            {display.layout === "split" ? "Split" : "Unified"}
+          </button>
+          <label>
+            <input
+              type="checkbox"
+              checked={display.ignoreWhitespace}
+              onChange={(event) =>
+                onDisplayChange?.({ ...display, ignoreWhitespace: event.target.checked })
+              }
+            />
+            Ignore whitespace
+          </label>
+        </div>
+      )}
       <div className="code-tabs" role="group" aria-label="Content view">
         {node.change && (
           <button aria-pressed={mode === "diff"} onClick={() => setMode("diff")}>
@@ -228,7 +368,16 @@ export function CodePane({
           </ul>
         </details>
       )}
-      {binary ? (
+      {showImage ? (
+        <div className={`image-previews${mode === "diff" ? " image-previews-diff" : ""}`}>
+          {(mode === "diff" || mode === "before") && node.oldPath && (
+            <ImageCard side="before" state={beforeImage} />
+          )}
+          {(mode === "diff" || mode === "after") && node.newPath && (
+            <ImageCard side="after" state={afterImage} />
+          )}
+        </div>
+      ) : binary ? (
         <p className="pane-note">
           Text diff unavailable for this binary file. No binary preview is provided.
         </p>

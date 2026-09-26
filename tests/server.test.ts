@@ -83,6 +83,39 @@ test("requesting unread full contents after an edit returns captured data; snaps
   expect((await request(path)).status).toBe(409);
 });
 
+test("image endpoint serves captured bytes and dimensions with the selected snapshot only", async () => {
+  const repo = await repository();
+  const png = Buffer.alloc(24);
+  Buffer.from("89504e470d0a1a0a", "hex").copy(png);
+  png.writeUInt32BE(13, 8);
+  png.write("IHDR", 12);
+  png.writeUInt32BE(32, 16);
+  png.writeUInt32BE(16, 20);
+  await repo.write("picture.bin", png);
+  await repo.commit();
+  const { request, session } = await serve(repo.root);
+  const id = session.snapshot.summary.id;
+  const url = `/api/image?${new URLSearchParams({ snapshot: id, side: "after", path: "picture.bin" })}`;
+  const head = await request(url, { method: "HEAD" });
+  expect(head.status).toBe(200);
+  expect(head.headers.get("content-type")).toBe("image/png");
+  expect(head.headers.get("x-changemap-image-width")).toBe("32");
+  expect(head.headers.get("x-changemap-image-height")).toBe("16");
+  expect(head.headers.get("x-content-type-options")).toBe("nosniff");
+  expect(head.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+  expect(await head.text()).toBe("");
+  await repo.write("picture.bin", "replaced");
+  expect(Buffer.from(await (await request(url)).arrayBuffer())).toEqual(png);
+  expect((await request(url, { headers: { Origin: "https://example.com" } })).status).toBe(403);
+  expect((await request(url.replace("picture.bin", "../../etc/passwd"))).status).toBe(404);
+  await session.refresh();
+  expect((await request(url)).status).toBe(409);
+  const next = `/api/image?${new URLSearchParams({ snapshot: session.snapshot.summary.id, side: "after", path: "picture.bin" })}`;
+  const unsupported = await request(next, { method: "HEAD" });
+  expect(unsupported.status).toBe(415);
+  expect(unsupported.headers.get("x-changemap-preview-reason")).toContain("Unsupported");
+});
+
 test("failed HTTP refresh keeps the old summary and full contents available for retry", async () => {
   const repo = await repository();
   await repo.write("file.ts", "A\n");

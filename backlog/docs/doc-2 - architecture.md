@@ -3,7 +3,7 @@ id: doc-2
 title: architecture
 type: other
 created_date: '2026-09-24 03:26'
-updated_date: '2026-09-25 07:29'
+updated_date: '2026-09-26 08:27'
 ---
 # 設計と保守上の判断
 
@@ -30,6 +30,10 @@ CLI・HTTPサーバー・React UIを単一のnpmパッケージとして配布�
 [ReviewSession](../../src/review/session.ts) は生成がすべて成功してからスナップショットを置換する。同時更新はまとめ、検知処理との競合を避ける。Git側とブラウザ側はそれぞれ前回処理終了後1.5秒間隔でHTTPポーリングする。更新検知は通知に留め、明示更新までグラフとコードを維持する。更新失敗時も既存の比較を維持する。
 
 全文取得はスナップショットIDと前後のパスで識別し、要求パスを実ファイルシステムへ渡さない。古いIDへの要求は409にし、異なる比較の内容を混在させない。
+
+画像プレビューはPNG・JPEG・GIF・WebPに限定する。拡張子は信頼せず、実バイトの形式ヘッダーからMIME型と寸法を判定する。1画像10 MiB、各辺8,192 px、合計2,400万画素を超えるもの、symlink・submoduleは配信しない。圧縮後サイズだけでは展開後の負荷を抑えられないため、画素数も制限する。SVGやPDFなど、ブラウザで能動的に扱える形式は対象外とする。アニメーションはブラウザ標準の再生に任せ、フレーム数の上限は設けない。
+
+画像専用APIはHEADで表示可否・MIME型・寸法、GETで実バイトを返す。既存の同一origin・Host・Origin検査とスナップショットID照合を共用し、保存済みスナップショット以外は読まない。MIME型は許可した4種類の固定値、`X-Content-Type-Options: nosniff`、`Cross-Origin-Resource-Policy: same-origin`、`Cache-Control: no-store`を付与する。画像の破損などブラウザでのデコード失敗はUIに理由を示す。サーバー側で画像を再エンコードしないため、ブラウザの画像デコーダに残るリスクはある。形式と画素数の制限は[OWASP ASVS](https://cornucopia.owasp.org/taxonomy/asvs-5.0/05-file-handling/02-file-upload-and-content)を参考にした。MIME型と`nosniff`の意味は[MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Content-Type-Options)を参照する。
 
 ## 固定データ内の依存解析
 
