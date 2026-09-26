@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { get } from "node:http";
@@ -14,17 +14,112 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
 });
 const assets = fileURLToPath(new URL("../dist/ui/", import.meta.url));
-async function serve(root: string, args = ["."]) {
+async function serve(
+  root: string,
+  args = ["."],
+  editorOptions: { editor?: string; env?: NodeJS.ProcessEnv } = {},
+) {
   const session = await ReviewSession.create(new SnapshotSource(root, parseInput(args)));
   const server = await startServer(session, {
     assets,
     pollIntervalMs: 25,
     configPath: join(root, ".git", "changemap-config.toml"),
+    ...editorOptions,
   });
   servers.push(server);
   const request = (path: string, init?: RequestInit) => fetch(`${server.url}${path}`, init);
   return { session, server, request };
 }
+
+test("editor API opens the selected working tree path and reports captured content differences", async () => {
+  const repo = await repository();
+  await repo.write("src/file.ts", "import './dependency';\nexport const value = 1;\n");
+  await repo.write("src/dependency.ts", "export {};\n");
+  await repo.commit();
+  await repo.write("src/file.ts", "import './dependency';\nexport const value = 2;\n");
+  const script = join(repo.root, ".git", "record-editor.mjs");
+  const marker = join(repo.root, ".git", "opened-path.txt");
+  await repo.write(
+    ".git/record-editor.mjs",
+    `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(marker)}, process.argv[2]);`,
+  );
+  const editor = `${JSON.stringify(process.execPath)} ${JSON.stringify(script)}`;
+  const { request, session } = await serve(repo.root, ["."], { editor });
+  const node = session.snapshot.summary.graph.merged.nodes.find(
+    (file) => file.newPath === "src/file.ts",
+  )!;
+  const query = new URLSearchParams({ snapshot: session.snapshot.summary.id, node: node.id });
+  const url = `/api/editor?${query}`;
+  expect(await request(url).then((response) => response.json())).toMatchObject({
+    available: true,
+    path: "src/file.ts",
+    differs: false,
+  });
+  const dependency = session.snapshot.summary.graph.merged.nodes.find(
+    (file) => file.newPath === "src/dependency.ts",
+  )!;
+  expect(dependency.status).toBe("unchanged");
+  expect(
+    await request(
+      `/api/editor?${new URLSearchParams({ snapshot: session.snapshot.summary.id, node: dependency.id })}`,
+    ).then((response) => response.json()),
+  ).toMatchObject({ available: true, path: "src/dependency.ts", differs: false });
+  await repo.write("src/file.ts", "changed since capture\n");
+  expect(await request(url).then((response) => response.json())).toMatchObject({
+    available: true,
+    differs: true,
+  });
+  expect((await request(url, { method: "POST" })).status).toBe(403);
+  const opened = await request(url, { method: "POST", headers: { "X-Changemap-Request": "1" } });
+  expect(opened.status).toBe(200);
+  expect(await readFile(marker, "utf8")).toBe(await realpath(join(repo.root, "src", "file.ts")));
+  await rm(join(repo.root, "src", "file.ts"));
+  expect(await request(url).then((response) => response.json())).toMatchObject({
+    available: false,
+    reason: "File is absent from the working tree.",
+  });
+  expect(
+    (await request(url, { method: "POST", headers: { "X-Changemap-Request": "1" } })).status,
+  ).toBe(404);
+  expect(
+    await request(
+      `/api/editor?${new URLSearchParams({ snapshot: session.snapshot.summary.id, node: "../../etc/passwd" })}`,
+    ).then((response) => response.json()),
+  ).toMatchObject({ available: false });
+  await session.refresh();
+  expect((await request(url)).status).toBe(409);
+});
+
+test("editor API explains missing commands and refuses files resolving outside the repository", async () => {
+  const repo = await repository();
+  await repo.write("file.ts", "before\n");
+  await repo.commit();
+  const { request, session } = await serve(repo.root, ["HEAD"], { env: {} });
+  const node = session.snapshot.summary.graph.merged.nodes[0];
+  const url = `/api/editor?${new URLSearchParams({ snapshot: session.snapshot.summary.id, node: node.id })}`;
+  const missing = await request(url, { method: "POST", headers: { "X-Changemap-Request": "1" } });
+  expect(missing.status).toBe(503);
+  expect((await missing.json()).error).toContain("Pass --editor or set VISUAL or EDITOR");
+  const failed = await serve(repo.root, ["HEAD"], {
+    editor: `${JSON.stringify(process.execPath)} --eval "process.exit(7)"`,
+  });
+  const failedUrl = `/api/editor?${new URLSearchParams({ snapshot: failed.session.snapshot.summary.id, node: failed.session.snapshot.summary.graph.merged.nodes[0].id })}`;
+  const failedResponse = await failed.request(failedUrl, {
+    method: "POST",
+    headers: { "X-Changemap-Request": "1" },
+  });
+  expect(failedResponse.status).toBe(503);
+  expect((await failedResponse.json()).error).toContain("exited with 7");
+  if (process.platform !== "win32") {
+    await rm(join(repo.root, "file.ts"));
+    await symlink(process.execPath, join(repo.root, "file.ts"));
+    const outside = await request(url).then((response) => response.json());
+    expect(outside).toMatchObject({
+      available: false,
+      reason: "File resolves outside the repository.",
+    });
+  }
+});
 
 test("serves HTML and its JS/CSS assets from the built distribution", async () => {
   const repo = await repository();

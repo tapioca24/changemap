@@ -67,10 +67,29 @@ npx changemap --help
 - Select a file to switch between **Diff**, **Before · full file**, and
   **After · full file**, where available. Other changed files are listed under
   **Outside dependency analysis**. Binary files have no text preview.
+- Select **Open in editor** in the code pane to open the file currently in the
+  working tree. This also works for unchanged dependency files. Historical or
+  staged contents may differ from the working tree; the pane points out a
+  difference. Files absent from the working tree cannot be opened.
 - Pan, zoom, or fit the map to explore it. File buttons also work with Enter or Space.
 - When files change, an update notice appears. Choose **Refresh comparison** to
   replace the captured map and code. Until then, what you are reviewing stays
   fixed. A failed refresh keeps the previous comparison.
+
+### Open files in an editor
+
+Set `VISUAL` or `EDITOR` to an editor command, or pass `--editor` to override
+them for one run. The file path is appended as the last argument. Quote an
+executable path containing spaces. Commands run without a shell.
+
+```sh
+changemap . --editor "code --reuse-window"
+```
+
+Terminal editors such as `vim` open in the terminal where changemap was
+started. If the editor command is missing or fails to start, the code pane
+shows the cause. The editor opens the current working tree file, not a
+temporary copy of the captured comparison.
 
 ## Settings
 

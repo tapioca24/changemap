@@ -6,6 +6,7 @@ import type { ReviewSession } from "../review/session.js";
 import { SettingsStore } from "../config/settings.js";
 import { validSettings } from "../shared/settings.js";
 import { inspectImage } from "./image-preview.js";
+import { editorCommand, inspectEditorFile, launchEditor } from "./editor.js";
 
 export interface LocalServer {
   url: string;
@@ -14,7 +15,14 @@ export interface LocalServer {
 
 export async function startServer(
   session: ReviewSession,
-  options: { port?: number; assets?: string; pollIntervalMs?: number; configPath?: string } = {},
+  options: {
+    port?: number;
+    assets?: string;
+    pollIntervalMs?: number;
+    configPath?: string;
+    editor?: string;
+    env?: NodeJS.ProcessEnv;
+  } = {},
 ): Promise<LocalServer> {
   const assets = options.assets ?? fileURLToPath(new URL("./ui/", import.meta.url));
   // Validate the packaged entry before announcing a working URL.
@@ -75,6 +83,44 @@ export async function startServer(
         json(response, 200, session.snapshot.summary);
       } else if (request.method === "GET" && url.pathname === "/api/status") {
         json(response, 200, session.status);
+      } else if (
+        (request.method === "GET" || request.method === "POST") &&
+        url.pathname === "/api/editor"
+      ) {
+        if (request.method === "POST" && request.headers["x-changemap-request"] !== "1") {
+          json(response, 403, { error: "A same-origin editor request is required." });
+          return;
+        }
+        const snapshot = session.snapshot;
+        const nodeId = url.searchParams.get("node");
+        if (url.searchParams.get("snapshot") !== snapshot.summary.id) {
+          json(response, 409, {
+            error: "This snapshot is no longer available. Refresh to use the current comparison.",
+          });
+        } else if (!nodeId) {
+          json(response, 400, { error: "Specify a file node." });
+        } else {
+          const file = await inspectEditorFile(snapshot, nodeId);
+          if (request.method === "GET") {
+            json(response, 200, {
+              available: file.available,
+              path: file.path,
+              differs: file.differs,
+              reason: file.reason,
+            });
+          } else if (!file.available || !file.absolutePath) {
+            json(response, 404, { error: file.reason });
+          } else {
+            try {
+              await launchEditor(file.absolutePath, editorCommand(options.editor, options.env));
+              json(response, 200, { path: file.path, differs: file.differs });
+            } catch (error) {
+              json(response, 503, {
+                error: `Could not open ${file.path}: ${error instanceof Error ? error.message : String(error)}`,
+              });
+            }
+          }
+        }
       } else if (
         (request.method === "GET" || request.method === "HEAD") &&
         url.pathname === "/api/image"

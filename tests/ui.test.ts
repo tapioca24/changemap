@@ -215,6 +215,60 @@ test("diff is default; switching sides cannot display an older asynchronous resp
   expect(fetcher.mock.calls[0][0]).toContain("snapshot=snapshot-1");
 });
 
+test("code pane opens a working tree file and explains launch errors", async () => {
+  const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.startsWith("/api/editor")) {
+      if (options?.method === "POST")
+        return new Response(
+          JSON.stringify({ error: "Could not open a.ts: editor command not found" }),
+          {
+            status: 503,
+          },
+        );
+      return new Response(JSON.stringify({ available: true, path: "a.ts", differs: true }));
+    }
+    if (options?.method === "HEAD") return new Response(null, { status: 415 });
+    return new Response(JSON.stringify({ encoding: "utf8", content: "captured" }));
+  });
+  vi.stubGlobal("fetch", fetcher);
+  render(createElement(CodePane, { snapshot, node: file("a.ts") }));
+  const button = await screen.findByRole("button", { name: "Open in editor" });
+  await vi.waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+  expect(screen.getByText(/working tree file differs/)).toBeTruthy();
+  fireEvent.click(button);
+  expect((await screen.findByRole("alert")).textContent).toContain("editor command not found");
+  expect(
+    fetcher.mock.calls.some(
+      ([url, options]) => String(url).includes("node=a.ts") && options?.method === "POST",
+    ),
+  ).toBe(true);
+});
+
+test("code pane disables editor action when the working tree file is absent", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.startsWith("/api/editor"))
+        return new Response(
+          JSON.stringify({
+            available: false,
+            path: "deleted.ts",
+            differs: false,
+            reason: "File is absent from the working tree.",
+          }),
+        );
+      if (options?.method === "HEAD") return new Response(null, { status: 415 });
+      return new Response(JSON.stringify({ encoding: "utf8", content: "captured" }));
+    }),
+  );
+  const deleted = { ...file("deleted.ts"), status: "deleted" as const, newPath: null };
+  render(createElement(CodePane, { snapshot, node: deleted }));
+  expect(await screen.findByText("File is absent from the working tree.")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Open in editor" }).hasAttribute("disabled")).toBe(
+    true,
+  );
+});
+
 test("display controls switch split rows and whitespace patch while full files remain available", async () => {
   vi.stubGlobal(
     "fetch",

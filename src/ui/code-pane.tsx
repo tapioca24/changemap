@@ -153,6 +153,13 @@ export const defaultDiffDisplay: DiffDisplaySettings = {
   ignoreWhitespace: false,
 };
 
+interface EditorFileState {
+  available: boolean;
+  path: string;
+  differs: boolean;
+  reason?: string;
+}
+
 function CopyPathButton({ path }: { path: string }) {
   const [result, setResult] = useState<"idle" | "copied" | "error">("idle");
   useEffect(() => {
@@ -300,6 +307,57 @@ export function CodePane({
   display?: DiffDisplaySettings;
   onDisplayChange?: (next: DiffDisplaySettings) => void;
 }) {
+  const editorKey = JSON.stringify([snapshot.id, node.id]);
+  const [editorFile, setEditorFile] = useState<{ key: string; value: EditorFileState } | null>(
+    null,
+  );
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [editorMessage, setEditorMessage] = useState("");
+  const [editorError, setEditorError] = useState("");
+  const currentEditorFile = editorFile?.key === editorKey ? editorFile.value : null;
+  const editorUrl = `/api/editor?${new URLSearchParams({ snapshot: snapshot.id, node: node.id })}`;
+  useEffect(() => {
+    let disposed = false;
+    request<EditorFileState>(editorUrl)
+      .then((value) => {
+        if (!disposed) setEditorFile({ key: editorKey, value });
+      })
+      .catch((error: Error) => {
+        if (!disposed)
+          setEditorFile({
+            key: editorKey,
+            value: {
+              available: false,
+              path: node.newPath ?? node.oldPath ?? "",
+              differs: false,
+              reason: error.message,
+            },
+          });
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [editorKey, editorUrl, node.newPath, node.oldPath]);
+  async function openInEditor() {
+    setEditorBusy(true);
+    setEditorMessage("");
+    setEditorError("");
+    try {
+      await request(editorUrl, "POST");
+      setEditorMessage(
+        "Opened in editor. If it uses a terminal, switch to the terminal running changemap.",
+      );
+    } catch (error) {
+      setEditorError(error instanceof Error ? error.message : String(error));
+      try {
+        setEditorFile({ key: editorKey, value: await request<EditorFileState>(editorUrl) });
+      } catch {
+        // The POST error is the useful message; another availability check can wait.
+      }
+    } finally {
+      setEditorBusy(false);
+    }
+  }
   const [mode, setMode] = useState<"diff" | "before" | "after">(
     node.status === "deleted" ? "before" : node.status === "unchanged" ? "after" : "diff",
   );
@@ -363,6 +421,20 @@ export function CodePane({
             <CopyPathButton path={node.oldPath!} />
           </div>
         )}
+        <button
+          type="button"
+          className="open-editor-button"
+          disabled={!currentEditorFile?.available || editorBusy}
+          onClick={openInEditor}
+        >
+          {editorBusy ? "Opening…" : "Open in editor"}
+        </button>
+        {currentEditorFile?.differs && (
+          <p>The working tree file differs from the captured code shown here.</p>
+        )}
+        {currentEditorFile && !currentEditorFile.available && <p>{currentEditorFile.reason}</p>}
+        {editorMessage && <p role="status">{editorMessage}</p>}
+        {editorError && <p role="alert">{editorError}</p>}
       </div>
       {!showImage && (
         <div className="display-settings" role="group" aria-label="Display settings">
