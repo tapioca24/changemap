@@ -3,7 +3,7 @@ id: doc-1
 title: usage
 type: guide
 created_date: '2026-09-23 15:07'
-updated_date: '2026-09-24 18:06'
+updated_date: '2026-09-26 08:44'
 ---
 # Usage guide
 
@@ -87,16 +87,26 @@ refresh; explicit commit IDs remain fixed.
   silently omitted. Symlink targets are stored without reading the target file.
 - Before/after validation detects observed changes; it is not an atomic filesystem
   snapshot and cannot guarantee detection of edits reverted between reads.
-- GitHub PR/GitLab MR inputs, comments, graph expansion, and format-specific binary
-  previews are not implemented.
+- GitHub PR/GitLab MR inputs, comments, graph expansion, and previews for
+  formats beyond PNG, JPEG, GIF, and WebP are not implemented.
 
 ## Review UI and settings
 
 Select a file in the change map to read its diff or captured before/after contents.
 Deleted files initially show their old full contents; unchanged neighbors show
-full contents. Renames retain both paths. Binary files show a text-unavailable
-message. Files outside dependency analysis appear in a separate area. On wide
-screens, the code pane is limited to the smaller of 55% of the workspace or 1440px.
+full contents. Renames retain both paths. Supported images show a preview instead
+of a text diff. Other binary files show why a preview is unavailable. Files outside
+dependency analysis appear in a separate area. On wide screens, the code pane is
+limited to the smaller of 55% of the workspace or 1440px.
+
+PNG, JPEG, GIF, and WebP are identified from their bytes, even when the filename
+has another extension. Animated GIF and WebP play normally. Diff shows the old
+and new images side by side; Before and After show one image. If only one side can
+be previewed, that image remains visible and the other side shows a reason. Images
+fit within the pane with their original pixel dimensions shown. Click an image
+to enlarge it; use Close, Escape, or the background to return to the preview.
+Preview is limited to 10 MiB per image, 8,192 pixels per edge, and 24 million
+pixels total. Symlinks and submodules are never previewed.
 
 Text diffs and full files use syntax colors for TypeScript, JavaScript, JSON, CSS,
 HTML, Markdown, Python, Go, Rust, Java, C/C++, C#, Ruby, PHP, shell scripts,
