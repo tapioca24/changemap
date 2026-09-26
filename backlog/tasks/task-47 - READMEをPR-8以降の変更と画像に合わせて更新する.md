@@ -1,5 +1,5 @@
 ---
-id: TASK-46
+id: TASK-47
 title: 'READMEをPR #8以降の変更と画像に合わせて更新する'
 status: To Do
 assignee: []
