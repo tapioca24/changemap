@@ -120,3 +120,40 @@ test("highlight failures keep diff code readable and report the reason", async (
   expect(screen.getByLabelText("File diff").textContent).toContain("const fresh = 2;");
   expect(screen.getByLabelText("File diff").querySelector(".line-add")).toBeTruthy();
 });
+
+test("copies each path of a renamed file and confirms success", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 404 })),
+  );
+  render(createElement(CodePane, { snapshot, node }));
+
+  fireEvent.click(screen.getByRole("button", { name: "Copy after.ts" }));
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith("after.ts"));
+  expect(await screen.findByText("Copied after.ts")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Copy after.ts" }).classList.contains("copied")).toBe(
+    true,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Copy before.js" }));
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith("before.js"));
+  expect(screen.getAllByRole("status").map((status) => status.textContent)).toContain(
+    "Copied before.js",
+  );
+});
+
+test("reports clipboard failures beside the path", async () => {
+  vi.stubGlobal("navigator", {
+    clipboard: { writeText: vi.fn().mockRejectedValue(new Error("Denied")) },
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 404 })),
+  );
+  render(createElement(CodePane, { snapshot, node }));
+
+  fireEvent.click(screen.getByRole("button", { name: "Copy after.ts" }));
+  expect((await screen.findByRole("alert")).textContent).toBe("コピーできませんでした");
+});
