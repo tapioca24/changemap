@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { analyzeTypeScript } from "../analysis/typescript.js";
+import { analyzeSnapshot, type AnalysisOptions } from "../analysis/pipeline.js";
 import { selectNeighborhood } from "../graph/select.js";
 import type {
   CapturedState,
@@ -39,6 +39,7 @@ export class SnapshotSource {
   constructor(
     readonly repository: string,
     readonly input: ReviewInput,
+    readonly analysisOptions: AnalysisOptions = {},
   ) {}
 
   private async resolve(ref: string): Promise<string> {
@@ -154,8 +155,8 @@ export class SnapshotSource {
             after: describe(inputs.after),
             changes,
             graph: selectNeighborhood(
-              analyzeTypeScript(inputs.before),
-              analyzeTypeScript(inputs.after),
+              await analyzeSnapshot(inputs.before, this.analysisOptions),
+              await analyzeSnapshot(inputs.after, this.analysisOptions),
               changes,
             ),
           }),

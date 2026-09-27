@@ -19,7 +19,7 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "tsdown && vite build",
+    "build": "tsdown && node scripts/copy-go-helper.mjs && vite build",
     "test": "pnpm build && vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --deny-warnings",

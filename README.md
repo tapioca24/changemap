@@ -2,7 +2,7 @@
 
 Understand code changes through file dependency maps.
 
-Review local Git changes in your browser. See which TypeScript files depend on
+Review local Git changes in your browser. See which TypeScript and Go files depend on
 changed code, follow added or removed dependencies, and read diffs alongside the map.
 
 ![Current review screen: checkout.ts switches from legacy-discount.ts to discount.ts, with added and deleted dependencies beside its code diff.](https://raw.githubusercontent.com/tapioca24/changemap/main/.github/assets/changemap.png)
@@ -58,7 +58,7 @@ npx changemap --help
 
 ## Read the map
 
-- Changed TypeScript files appear with their direct dependencies and direct users
+- Changed TypeScript and Go files appear with their direct dependencies and direct users
   from both sides of the comparison. Arrows point from the referencing file to
   its target. The map does not recursively expand the whole project.
 - Other changed files remain accessible under **Outside dependency analysis**.
@@ -85,6 +85,45 @@ shows the cause. The editor opens the current working tree file, not a
 temporary copy of the captured comparison.
 
 ## Settings
+
+### Go analysis
+
+Go analysis requires **Go on your PATH** (tested with Go 1.26.5) and exactly one
+captured `go.mod`, at the repository root or in a subdirectory. TypeScript and Go
+can coexist. If Go is unavailable, TypeScript analysis and code review remain
+available, with a diagnostic for unanalyzed Go files.
+
+```sh
+npx changemap . --go-os linux --go-arch amd64 --go-tags integration,feature
+```
+
+The default target is the host OS and architecture, with no custom tags. Both
+sides use the same options. The review shows the target, tags, and Go version.
+File suffixes, `//go:build`, and legacy `// +build` constraints select source files;
+excluded files remain accessible outside dependency analysis. Architecture
+feature tags use the baseline for the selected architecture, and cgo is disabled.
+
+Edges connect references to the files declaring the referenced functions, types,
+variables, fields, or methods, including references within a package. Both
+internal and external `*_test.go` packages are included. Interface calls connect
+to the interface declaration; implementations are not enumerated. Imports alone
+do not create edges to every file in a package.
+
+Only captured sources are analyzed. Standard-library sources, installed modules,
+vendor directories, and local `replace` targets outside the snapshot are not
+read. Consequently, standard-library and external imports can leave type
+information incomplete; resolved internal edges are retained with diagnostics.
+Blank imports are reported as unresolved because package initialization effects
+are not represented by declaration references. Multiple modules and `go.work`
+are unsupported. `testdata`, directories starting with `.` or `_`, symlinks, and
+binary files are excluded. Sources outside the single module are diagnosed.
+
+The bundled helper is compiled using the installed Go toolchain in a temporary
+directory, with a build cache under the system temporary directory. Project code
+is passed as snapshot data, never built or executed. No dependencies or toolchains
+are downloaded. The first Go review can take longer while the helper is compiled.
+
+### Appearance
 
 Choose a theme and map direction in the toolbar. The 24 themes include Catppuccin
 (Latte, Frappé, Macchiato, and Mocha), Tokyo Night, Rosé Pine, Vitesse, Kanagawa,
@@ -117,7 +156,7 @@ For manual configuration, the theme values are:
 
 - Comparisons use local Git data and leave the source repository unchanged.
   GitHub PR and GitLab MR URLs are not supported.
-- Dependency analysis covers TypeScript files. Installed dependencies and files
+- Dependency analysis covers TypeScript and Go files. Installed dependencies and files
   outside the captured repository are not read. Missing configuration presets or
   unresolved references can make the map incomplete; check the UI notices.
 - Unmerged indexes and working-tree comparisons in sparse checkouts are rejected.

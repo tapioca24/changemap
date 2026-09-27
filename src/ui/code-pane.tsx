@@ -490,9 +490,8 @@ export function CodePane({
           open={refs.some((ref) => ref.outcome === "unresolved")}
         >
           <summary>
-            Module references · {refs.filter((ref) => ref.outcome === "unresolved").length}{" "}
-            unresolved · {refs.filter((ref) => ref.outcome === "excluded").length} intentionally
-            excluded
+            References · {refs.filter((ref) => ref.outcome === "unresolved").length} unresolved ·{" "}
+            {refs.filter((ref) => ref.outcome === "excluded").length} intentionally excluded
           </summary>
           <ul>
             {refs.map((ref, i) => (

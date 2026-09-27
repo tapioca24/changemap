@@ -40,6 +40,10 @@ test.each([
   ["--port=abc"],
   ["--editor"],
   ["--editor="],
+  ["--go-os"],
+  ["--go-arch="],
+  ["--go-tags", "feature,,other"],
+  ["--go-os", "../../linux"],
   ["--pr", "1"],
   ["--unknown"],
   ["--help", "HEAD"],
@@ -63,6 +67,15 @@ test("options default to opening a browser with a free port and support suppress
     command: "review",
     editor: "vim -p",
   });
+});
+
+test("Go options accept separate and inline values and normalize build tags", () => {
+  expect(
+    parseOptions([".", "--go-os", "linux", "--go-arch=arm64", "--go-tags=feature,other,feature"]),
+  ).toMatchObject({
+    go: { os: "linux", arch: "arm64", tags: ["feature", "other"] },
+  });
+  expect(parseOptions([])).toMatchObject({ go: {} });
 });
 
 test("CLI reports missing repositories and commits", async () => {

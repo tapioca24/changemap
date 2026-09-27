@@ -549,6 +549,9 @@ main {
 .notice summary {
   cursor: pointer;
 }
+.go-configuration {
+  border-left-color: var(--blue);
+}
 .workspace {
   display: flex;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);

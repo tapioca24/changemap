@@ -351,3 +351,27 @@ test("outside file list can be collapsed and restored; analysis details start co
   fireEvent.click(toggle);
   expect(screen.getByLabelText("Unanalyzed changed files")).toBeTruthy();
 });
+
+test("shows the selected Go configuration and retains partial-analysis diagnostics", async () => {
+  const initial = snapshot("go", "main.go");
+  api({
+    ...initial,
+    graph: {
+      ...initial.graph,
+      incomplete: true,
+      after: {
+        ...initial.graph.after,
+        go: { os: "linux", arch: "amd64", tags: ["integration"], version: "go1.26.5", cgo: false },
+        diagnostics: [
+          { path: "main.go", message: "External package is unavailable in the captured module." },
+        ],
+      },
+    },
+  });
+  render(createElement(App));
+  expect(await screen.findByText(/Go: linux\/amd64/)).toBeTruthy();
+  expect(screen.getByText(/tags: integration/)).toBeTruthy();
+  expect(screen.getByText(/External package is unavailable/)).toBeTruthy();
+  fireEvent.click(screen.getByText("Open main.go"));
+  expect(screen.getByLabelText("File diff")).toBeTruthy();
+});

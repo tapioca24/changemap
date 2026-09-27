@@ -110,6 +110,7 @@ export function App() {
     }
   }
   const stale = status?.stale || (snapshot && status && snapshot.id !== status.snapshotId);
+  const go = snapshot?.graph.after.go ?? snapshot?.graph.before.go;
   const notice = error ?? status?.error ?? connectionError;
   const refreshButton = (
     <button
@@ -224,6 +225,12 @@ export function App() {
                 <span>{stale ? "Update available" : "Snapshot held"}</span>
               </div>
             </section>
+            {go && (
+              <div className="notice go-configuration" role="status">
+                Go: {go.os}/{go.arch} · tags: {go.tags.join(", ") || "none"} · {go.version} · cgo
+                disabled
+              </div>
+            )}
             {snapshot.graph.incomplete && (
               <details className="notice analysis">
                 <summary>Dependency analysis is incomplete. Direct users may be missing.</summary>
