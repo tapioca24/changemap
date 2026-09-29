@@ -1,6 +1,6 @@
 {
   "name": "changemap",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Understand code changes through file dependency maps.",
   "license": "MIT",
   "author": "tapioca24",
