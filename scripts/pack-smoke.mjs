@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -208,6 +217,13 @@ try {
   assert.equal(version.stdout.trim(), metadata.version);
   assert.equal(version.stderr, "");
   await testServer(installed);
+  if (process.env.CHANGEMAP_PACK_OUTPUT_DIR) {
+    mkdirSync(process.env.CHANGEMAP_PACK_OUTPUT_DIR, { recursive: true });
+    copyFileSync(
+      join(temporary, archives[0]),
+      join(process.env.CHANGEMAP_PACK_OUTPUT_DIR, archives[0]),
+    );
+  }
   console.log(
     `Packed CLI, React assets, settings, dependency analysis, full contents and refresh passed in an isolated directory (${process.platform}, ${process.version}).`,
   );

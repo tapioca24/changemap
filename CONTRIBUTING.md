@@ -87,6 +87,24 @@ analysis, captured code, and refresh. The root [LICENSE](LICENSE) is the project
 MIT license text; `package.json` declares `MIT`. Preserve both and the bundled
 third-party notices when changing the build or distribution.
 
+## npm releases
+
+The package has an npm Trusted Publisher connection for the GitHub Actions
+workflow `.github/workflows/publish.yml`. That workflow needs permission to run
+`npm publish`; it uses OIDC, so no npm token is stored in GitHub Secrets.
+
+To release a stable version, update `package.json` and the lockfile, merge the
+change to `main`, and wait for CI to pass. Create a `v<version>` tag on that
+commit, then publish a GitHub Release for the tag. Publishing the Release starts
+the npm workflow. Drafts and prereleases do not publish to npm.
+
+The workflow rejects a tag that differs from `package.json` or points outside
+`main`. It reruns the full Linux, macOS, and Windows CI checks, then validates a
+packed archive in isolation and publishes that same archive to npm. The publish
+job reports failure in GitHub Actions and writes the published version and npm
+link to its job summary on success. Check that summary and the npm package page
+after the workflow finishes. An already published version cannot be reused.
+
 ## Benchmarks
 
 After `pnpm build`:
