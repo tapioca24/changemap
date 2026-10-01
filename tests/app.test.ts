@@ -128,16 +128,20 @@ function api(initial: ReviewSummary) {
   return state;
 }
 let measuredWidth = 1440;
-let resizeWorkspace: () => void;
+const resizeCallbacks = new Set<() => void>();
+function resizeWorkspace() {
+  for (const callback of resizeCallbacks) callback();
+}
 beforeEach(() => {
   measuredWidth = 1440;
+  resizeCallbacks.clear();
   document.cookie = "changemap.workspace=; Max-Age=0; Path=/";
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => measuredWidth);
   vi.stubGlobal(
     "ResizeObserver",
     class {
       constructor(callback: () => void) {
-        resizeWorkspace = callback;
+        resizeCallbacks.add(callback);
       }
       observe() {}
       disconnect() {}
@@ -157,7 +161,7 @@ test("stale notification and failed refresh preserve selected graph and code; su
   fireEvent.click(await screen.findByText("Open old.ts"));
   expect(addedCode()).toContain("old-snapshot");
   state.status = { ...state.status, stale: true };
-  expect(await screen.findByText(/New changes are available/, {}, { timeout: 3000 })).toBeTruthy();
+  expect(await screen.findByText(/Update available/, {}, { timeout: 3000 })).toBeTruthy();
   expect(addedCode()).toContain("old-snapshot");
   state.failure = true;
   fireEvent.click(screen.getByRole("button", { name: /Refresh comparison/ }));
@@ -194,6 +198,7 @@ test("theme and direction remain applied after failed saves and review continues
   state.saveFailure = true;
   const { container } = render(createElement(App));
   await screen.findByText("Open file.ts");
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
   await waitFor(() =>
     expect((screen.getByLabelText("Theme") as HTMLSelectElement).disabled).toBe(false),
   );
@@ -207,10 +212,12 @@ test("theme and direction remain applied after failed saves and review continues
     expect(container.querySelector(".app")?.getAttribute("data-theme")).toBe(theme);
   }
   for (const direction of ["TB", "RL", "BT", "LR"]) {
-    fireEvent.change(screen.getByLabelText("Direction"), { target: { value: direction } });
+    fireEvent.change(screen.getByLabelText("Graph direction"), { target: { value: direction } });
     expect(screen.getByLabelText("Test graph").getAttribute("data-direction")).toBe(direction);
   }
-  expect(await screen.findByText(/Settings could not be saved/)).toBeTruthy();
+  expect((await screen.findAllByText(/Settings could not be saved/)).length).toBeGreaterThan(0);
+  fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
+  expect(document.querySelector(".settings-warning-indicator")).toBeTruthy();
   expect(state.saved).toHaveLength(8);
   expect(state.saved.at(-1)).toEqual({ theme: "catppuccin-mocha", orientation: "LR" });
   fireEvent.click(screen.getByText("Open file.ts"));
@@ -220,6 +227,7 @@ test("theme and direction remain applied after failed saves and review continues
 test("all bundled themes appear in the existing selector and update the whole app", async () => {
   api(snapshot("one", "file.ts"));
   const { container } = render(createElement(App));
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
   await waitFor(() =>
     expect((screen.getByLabelText("Theme") as HTMLSelectElement).disabled).toBe(false),
   );
@@ -232,6 +240,20 @@ test("all bundled themes appear in the existing selector and update the whole ap
     expect(app?.style.getPropertyValue("--base")).toMatch(/^#[0-9a-f]{6}$/);
     expect(app?.style.getPropertyValue("--text")).toMatch(/^#[0-9a-f]{6}$/);
   }
+});
+
+test("diff preferences chosen in an empty review survive reopening", async () => {
+  api(snapshot("empty"));
+  const view = render(createElement(App));
+  await screen.findByText("No changes");
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  fireEvent.click(screen.getByRole("radio", { name: /Split/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
+  expect(decodeURIComponent(document.cookie)).toContain('"layout":"split"');
+  view.unmount();
+  render(createElement(App));
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  expect(screen.getByRole("radio", { name: /Split/ }).getAttribute("aria-checked")).toBe("true");
 });
 
 test("selection survives refresh with updated code, then closes when the file disappears", async () => {
@@ -255,54 +277,76 @@ test("pane starts closed, supports keyboard resize, remembers width and returns 
   const file = await screen.findByText("Open file.ts");
   expect(screen.queryByLabelText("Code pane")).toBeNull();
   fireEvent.click(file);
-  fireEvent.click(screen.getByRole("button", { name: "Split diff" }));
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  fireEvent.click(screen.getByRole("radio", { name: /Split/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
   expect(screen.queryByLabelText("Wrap lines")).toBeNull();
   expect(document.cookie).toContain("changemap.workspace=");
   const separator = screen.getByRole("separator");
-  expect(separator.getAttribute("aria-valuenow")).toBe("30");
+  expect(separator.getAttribute("aria-valuenow")).toBe("45");
   fireEvent.keyDown(separator, { key: "End" });
-  expect(separator.getAttribute("aria-valuenow")).toBe("55");
+  expect(separator.getAttribute("aria-valuenow")).toBe("70");
   fireEvent.keyDown(separator, { key: "ArrowLeft" });
-  expect(separator.getAttribute("aria-valuenow")).toBe("55");
+  expect(separator.getAttribute("aria-valuenow")).toBe("70");
   fireEvent.click(screen.getByRole("button", { name: /Close code pane/ }));
   expect(screen.queryByLabelText("Code pane")).toBeNull();
   expect(screen.getByText("Open file.ts")).toBe(file);
   fireEvent.click(screen.getByText("Open selected file"));
-  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("55");
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("70");
   view.unmount();
   render(createElement(App));
   fireEvent.click(await screen.findByText("Open file.ts"));
-  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("55");
-  expect(screen.getByRole("button", { name: "Split diff" }).getAttribute("aria-pressed")).toBe(
-    "true",
-  );
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("70");
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  expect(screen.getByRole("radio", { name: /Split/ }).getAttribute("aria-checked")).toBe("true");
   expect(screen.queryByLabelText("Wrap lines")).toBeNull();
 });
 
-test("wide screens cap the code pane at 1440px without discarding a saved 55% preference", async () => {
+test("wide screens cap the code pane at 1920px without discarding a saved 70% preference", async () => {
   measuredWidth = 3200;
-  document.cookie = `changemap.workspace=${encodeURIComponent(JSON.stringify({ width: 55, listOpen: true }))}; Path=/`;
+  document.cookie = `changemap.workspace=${encodeURIComponent(JSON.stringify({ width: 70, listOpen: true }))}; Path=/`;
   api(snapshot("one", "file.ts"));
   render(createElement(App));
   fireEvent.click(await screen.findByText("Open file.ts"));
   const separator = screen.getByRole("separator");
   const workspace = screen.getByLabelText("Change map").parentElement!;
-  expect(separator.getAttribute("aria-valuemax")).toBe("45");
-  expect(separator.getAttribute("aria-valuenow")).toBe("45");
-  expect(workspace.style.getPropertyValue("--pane-width")).toBe("45%");
+  expect(separator.getAttribute("aria-valuemax")).toBe("60");
+  expect(separator.getAttribute("aria-valuenow")).toBe("60");
+  expect(workspace.style.getPropertyValue("--pane-width")).toBe("60%");
   act(() => {
     measuredWidth = 2560;
     resizeWorkspace();
   });
-  expect(separator.getAttribute("aria-valuemax")).toBe("55");
-  expect(separator.getAttribute("aria-valuenow")).toBe("55");
-  expect(workspace.style.getPropertyValue("--pane-width")).toBe("55%");
+  expect(separator.getAttribute("aria-valuemax")).toBe("70");
+  expect(separator.getAttribute("aria-valuenow")).toBe("70");
+  expect(workspace.style.getPropertyValue("--pane-width")).toBe("70%");
   act(() => {
     measuredWidth = 3200;
     resizeWorkspace();
   });
   fireEvent.keyDown(separator, { key: "End" });
-  expect(separator.getAttribute("aria-valuenow")).toBe("45");
+  expect(separator.getAttribute("aria-valuenow")).toBe("60");
+});
+
+test("open Other files leaves at least 320px for the graph beside the code pane", async () => {
+  const initial = snapshot("one", "README.md");
+  const file = initial.graph.merged.nodes[0];
+  api({
+    ...initial,
+    graph: {
+      ...initial.graph,
+      merged: {
+        ...initial.graph.merged,
+        nodes: [{ ...file, analyzed: { before: false, after: false } }],
+      },
+    },
+  });
+  document.cookie = `changemap.workspace=${encodeURIComponent(JSON.stringify({ width: 70, listOpen: true }))}; Path=/`;
+  render(createElement(App));
+  fireEvent.click(await screen.findByText("README.md"));
+  const workspace = screen.getByLabelText("Change map").parentElement!;
+  const paneWidth = Number.parseFloat(workspace.style.getPropertyValue("--pane-width"));
+  expect(measuredWidth * (1 - paneWidth / 100) - 280 - 6).toBeGreaterThanOrEqual(319.9);
 });
 
 test("narrow screen returns to the graph without losing selection or remounting it", async () => {
@@ -339,16 +383,20 @@ test("outside file list can be collapsed and restored; analysis details start co
     },
   });
   const view = render(createElement(App));
-  fireEvent.click(await screen.findByText("README.md"));
+  const toggle = await screen.findByRole("button", { name: /Open Other files/ });
+  fireEvent.click(toggle);
+  fireEvent.click(screen.getByText("README.md"));
   expect(screen.getByLabelText("File diff")).toBeTruthy();
   expect(screen.getByText(/Direct users may be missing/).closest("details")?.open).toBe(false);
-  fireEvent.click(screen.getByRole("button", { name: /Other files/ }));
-  expect(screen.queryByLabelText("Unanalyzed changed files")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /Close Other files/ }));
+  expect(screen.getByLabelText("Unanalyzed changed files").getAttribute("aria-hidden")).toBe(
+    "true",
+  );
   view.unmount();
   render(createElement(App));
-  const toggle = await screen.findByRole("button", { name: /Other files/ });
-  expect(toggle.getAttribute("aria-expanded")).toBe("false");
-  fireEvent.click(toggle);
+  const restoredToggle = await screen.findByRole("button", { name: /Other files/ });
+  expect(restoredToggle.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(restoredToggle);
   expect(screen.getByLabelText("Unanalyzed changed files")).toBeTruthy();
 });
 
@@ -369,7 +417,9 @@ test("shows the selected Go configuration and retains partial-analysis diagnosti
     },
   });
   render(createElement(App));
-  expect(await screen.findByText(/Go: linux\/amd64/)).toBeTruthy();
+  await screen.findByText("Open main.go");
+  fireEvent.click(screen.getByRole("button", { name: "Snapshot details" }));
+  expect(await screen.findByText(/linux\/amd64/)).toBeTruthy();
   expect(screen.getByText(/tags: integration/)).toBeTruthy();
   expect(screen.getByText(/External package is unavailable/)).toBeTruthy();
   fireEvent.click(screen.getByText("Open main.go"));

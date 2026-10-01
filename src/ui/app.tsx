@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReviewStatus, ReviewSummary } from "../shared/review.js";
-import {
-  defaults,
-  themes,
-  orientations,
-  type Settings,
-  type SettingsState,
-} from "../shared/settings.js";
+import { defaults, type Settings, type SettingsState } from "../shared/settings.js";
 import { request } from "./api.js";
-import { isLightTheme, themeName, themeStyle } from "./themes.js";
-import { Workspace } from "./workspace.js";
+import { isLightTheme, themeStyle } from "./themes.js";
+import { Workspace, loadPreferences, savePreferences } from "./workspace.js";
+import { SettingsDialog, SnapshotDetails } from "./review-controls.js";
+import { RefreshCw } from "lucide-react";
+import { Button } from "@base-ui/react/button";
 import "./style.css";
 
 export function App() {
@@ -22,9 +19,17 @@ export function App() {
   const [settings, setSettings] = useState<Settings>(defaults);
   const [settingsReady, setSettingsReady] = useState(false);
   const [settingsWarning, setSettingsWarning] = useState<string | null>(null);
+  const [preferences, setPreferences] = useState(loadPreferences);
+  useEffect(() => savePreferences(preferences), [preferences]);
   const settingsRef = useRef(settings);
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
   const saveVersion = useRef(0);
+  useEffect(() => {
+    for (const [name, value] of Object.entries(themeStyle(settings.theme))) {
+      if (name.startsWith("--") && typeof value === "string")
+        document.documentElement.style.setProperty(name, value);
+    }
+  }, [settings.theme]);
   useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -110,17 +115,28 @@ export function App() {
     }
   }
   const stale = status?.stale || (snapshot && status && snapshot.id !== status.snapshotId);
-  const go = snapshot?.graph.after.go ?? snapshot?.graph.before.go;
   const notice = error ?? status?.error ?? connectionError;
   const refreshButton = (
-    <button
+    <Button
       className="refresh"
       disabled={busy || status?.refreshing}
       onClick={() => void refresh()}
+      aria-label={
+        busy || status?.refreshing
+          ? "Capturing comparison"
+          : notice
+            ? "Retry refresh"
+            : "Refresh comparison"
+      }
+      title={
+        busy || status?.refreshing ? "Capturing…" : notice ? "Retry refresh" : "Refresh comparison"
+      }
     >
-      {busy || status?.refreshing ? "Capturing…" : notice ? "Retry refresh" : "Refresh comparison"}{" "}
-      ↻
-    </button>
+      <RefreshCw aria-hidden="true" />
+      <span>
+        {busy || status?.refreshing ? "Capturing…" : notice ? "Retry refresh" : "Refresh"}
+      </span>
+    </Button>
   );
   return (
     <div
@@ -133,104 +149,59 @@ export function App() {
         <a className="wordmark" href="/">
           ↗ changemap
         </a>
-        <span className="local-label">LOCAL / REVIEW</span>
-        <div className="settings">
-          <label>
-            Theme
-            <select
-              value={settings.theme}
-              disabled={!settingsReady}
-              onChange={(event) =>
-                changeSettings({
-                  ...settingsRef.current,
-                  theme: event.target.value as Settings["theme"],
-                })
-              }
-            >
-              {themes.map((theme) => (
-                <option key={theme} value={theme}>
-                  {themeName(theme)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Direction
-            <select
-              value={settings.orientation}
-              disabled={!settingsReady}
-              onChange={(event) =>
-                changeSettings({
-                  ...settingsRef.current,
-                  orientation: event.target.value as Settings["orientation"],
-                })
-              }
-            >
-              {orientations.map((direction) => (
-                <option key={direction} value={direction}>
-                  {
-                    {
-                      LR: "Left → right",
-                      TB: "Top → bottom",
-                      RL: "Right → left",
-                      BT: "Bottom → top",
-                    }[direction]
-                  }
-                </option>
-              ))}
-            </select>
-          </label>
+        {snapshot && (
+          <div className="header-comparison" role="group" aria-label="Comparison targets">
+            <strong className="repository-name" title={snapshot.repository}>
+              {snapshot.repository.split(/[/\\]/).pop()}
+            </strong>
+            <span className="comparison-target">
+              <small>BEFORE</small>
+              <strong>{snapshot.before.label}</strong>
+              <code>{snapshot.before.commit?.slice(0, 8) ?? snapshot.before.kind}</code>
+            </span>
+            <span className="comparison-arrow">→</span>
+            <span className="comparison-target">
+              <small>AFTER</small>
+              <strong>{snapshot.after.label}</strong>
+              <code>{snapshot.after.commit?.slice(0, 8) ?? snapshot.after.kind}</code>
+            </span>
+          </div>
+        )}
+        <div className="header-actions">
+          {snapshot && (
+            <>
+              <span className="change-count">{snapshot.changes.length} changed files</span>
+              <time className="capture-clock" dateTime={snapshot.capturedAt}>
+                {new Date(snapshot.capturedAt).toLocaleTimeString()}
+              </time>
+              {stale && (
+                <span className="update-available" role="status">
+                  Update available
+                </span>
+              )}
+              <SnapshotDetails snapshot={snapshot} />
+            </>
+          )}
+          {refreshButton}
+          <SettingsDialog
+            settings={settings}
+            ready={settingsReady}
+            warning={settingsWarning}
+            onSettingsChange={changeSettings}
+            display={preferences.display}
+            onDisplayChange={(display) => setPreferences((current) => ({ ...current, display }))}
+          />
         </div>
       </header>
       <main>
-        {settingsWarning && (
-          <div className="notice" role="status">
-            {settingsWarning}
-          </div>
-        )}
         {notice && (
           <div className="notice error" role="alert">
             {notice}
             <small>Your captured graph and code are kept until a refresh succeeds.</small>
           </div>
         )}
-        {stale && !notice && (
-          <div className="notice" role="status">
-            New changes are available.{" "}
-            <small>The captured graph and code stay fixed until you refresh.</small>
-          </div>
-        )}
         {snapshot ? (
           <>
-            <section className="comparison" aria-label="Comparison targets">
-              <strong className="repository-name" title={snapshot.repository}>
-                {snapshot.repository.split(/[/\\]/).pop()}
-              </strong>
-              <div>
-                <small>BEFORE</small>
-                <strong>{snapshot.before.label}</strong>
-                <code>{snapshot.before.commit?.slice(0, 8) ?? snapshot.before.kind}</code>
-              </div>
-              <span>→</span>
-              <div>
-                <small>AFTER</small>
-                <strong>{snapshot.after.label}</strong>
-                <code>{snapshot.after.commit?.slice(0, 8) ?? snapshot.after.kind}</code>
-              </div>
-              <div className="capture-time">
-                <small>{snapshot.changes.length} CHANGED FILES</small>
-                <time dateTime={snapshot.capturedAt}>
-                  {new Date(snapshot.capturedAt).toLocaleTimeString()}
-                </time>
-                <span>{stale ? "Update available" : "Snapshot held"}</span>
-              </div>
-            </section>
-            {go && (
-              <div className="notice go-configuration" role="status">
-                Go: {go.os}/{go.arch} · tags: {go.tags.join(", ") || "none"} · {go.version} · cgo
-                disabled
-              </div>
-            )}
             {snapshot.graph.incomplete && (
               <details className="notice analysis">
                 <summary>Dependency analysis is incomplete. Direct users may be missing.</summary>
@@ -255,24 +226,19 @@ export function App() {
                 direction={settings.orientation}
                 selected={selected}
                 onSelect={setSelected}
-                refresh={refreshButton}
+                preferences={preferences}
+                setPreferences={setPreferences}
               />
             ) : (
               <section className="empty">
-                {refreshButton}
                 <span>✓</span>
                 <h2>No changes</h2>
                 <p>These two states match. New changes appear after you refresh.</p>
               </section>
             )}
-            <footer>
-              <span>Captured locally · {snapshot.mode}</span>
-              <span>Stop the server with Ctrl+C.</span>
-            </footer>
           </>
         ) : (
           <div className="loading-comparison">
-            {refreshButton}
             <p role="status">
               {notice ? "Use Retry refresh to load the comparison." : "Loading your comparison…"}
             </p>

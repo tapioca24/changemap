@@ -1,27 +1,23 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { ReviewSummary } from "../shared/review.js";
 import type { Settings } from "../shared/settings.js";
-import { Graph, statusLabels } from "./graph.js";
+import { Graph } from "./graph.js";
 import { CodePane, defaultDiffDisplay, type DiffDisplaySettings } from "./code-pane.js";
+import { ChevronRight, Files } from "lucide-react";
+import { StatusBadge } from "./status-badge.js";
+import { Button } from "@base-ui/react/button";
 
 const storageKey = "changemap.workspace";
-const maxCodePanePixels = 1440;
-const maxCodePanePercentage = 55;
+const maxCodePanePixels = 1920;
+const maxCodePanePercentage = 70;
 // A cookie survives the CLI's ephemeral ports; store only these non-sensitive preferences.
-interface WorkspacePreferences {
+export interface WorkspacePreferences {
   width: number;
   listOpen: boolean;
   display: DiffDisplaySettings;
 }
 
-function loadPreferences(): WorkspacePreferences {
+export function loadPreferences(): WorkspacePreferences {
   try {
     const value = JSON.parse(
       decodeURIComponent(
@@ -35,8 +31,8 @@ function loadPreferences(): WorkspacePreferences {
       width:
         typeof value?.width === "number" && Number.isFinite(value.width)
           ? Math.min(maxCodePanePercentage, Math.max(0, value.width))
-          : 30,
-      listOpen: typeof value?.listOpen === "boolean" ? value.listOpen : true,
+          : 45,
+      listOpen: typeof value?.listOpen === "boolean" ? value.listOpen : false,
       display: {
         layout: value?.display?.layout === "split" ? "split" : "unified",
         ignoreWhitespace:
@@ -46,7 +42,15 @@ function loadPreferences(): WorkspacePreferences {
       },
     };
   } catch {
-    return { width: 30, listOpen: true, display: defaultDiffDisplay };
+    return { width: 45, listOpen: false, display: defaultDiffDisplay };
+  }
+}
+
+export function savePreferences(preferences: WorkspacePreferences) {
+  try {
+    document.cookie = `${storageKey}=${encodeURIComponent(JSON.stringify(preferences))}; Path=/; Max-Age=31536000; SameSite=Strict`;
+  } catch {
+    /* Storage is optional. */
   }
 }
 
@@ -55,15 +59,16 @@ export function Workspace({
   direction,
   selected,
   onSelect,
-  refresh,
+  preferences,
+  setPreferences,
 }: {
   snapshot: ReviewSummary;
   direction: Settings["orientation"];
   selected: string | null;
   onSelect(id: string | null): void;
-  refresh: ReactNode;
+  preferences: WorkspacePreferences;
+  setPreferences: React.Dispatch<React.SetStateAction<WorkspacePreferences>>;
 }) {
-  const [preferences, setPreferences] = useState(loadPreferences);
   const [paneOpen, setPaneOpen] = useState(false);
   const [resizing, setResizing] = useState(false);
   const [width, setWidth] = useState(0);
@@ -73,14 +78,23 @@ export function Workspace({
   const node = snapshot.graph.merged.nodes.find((file) => file.id === selected);
   const open = paneOpen && !!node;
   const narrow = width > 0 && width < 960;
-  const maximum = width
-    ? Math.min(maxCodePanePercentage, (maxCodePanePixels / width) * 100)
-    : maxCodePanePercentage;
-  const minimum = width ? Math.min(maximum, (320 / width) * 100) : 0;
-  const paneWidth = Math.min(maximum, Math.max(minimum, preferences.width));
   const outside = snapshot.graph.merged.nodes.filter(
     (file) => !file.analyzed.before && !file.analyzed.after,
   );
+  const otherFilesWidth = narrow ? 220 : 280;
+  const graphMinimum = preferences.listOpen && outside.length ? otherFilesWidth + 320 : 320;
+  const maximum = width
+    ? Math.max(
+        0,
+        Math.min(
+          maxCodePanePercentage,
+          (maxCodePanePixels / width) * 100,
+          narrow ? maxCodePanePercentage : ((width - graphMinimum - 6) / width) * 100,
+        ),
+      )
+    : maxCodePanePercentage;
+  const minimum = width ? Math.min(maximum, (320 / width) * 100) : 0;
+  const paneWidth = Math.min(maximum, Math.max(minimum, preferences.width));
   useEffect(() => {
     const element = root.current!;
     const observer = new ResizeObserver(() => setWidth(element.clientWidth));
@@ -88,14 +102,6 @@ export function Workspace({
     setWidth(element.clientWidth);
     return () => observer.disconnect();
   }, []);
-  useEffect(() => {
-    try {
-      if (!resizing)
-        document.cookie = `${storageKey}=${encodeURIComponent(JSON.stringify(preferences))}; Path=/; Max-Age=31536000; SameSite=Strict`;
-    } catch {
-      /* Storage is optional. */
-    }
-  }, [preferences, resizing]);
   useEffect(() => {
     if (open && narrow) closeButton.current?.focus();
   }, [open, narrow]);
@@ -125,34 +131,22 @@ export function Workspace({
       style={{ "--pane-width": `${paneWidth}%` } as CSSProperties}
     >
       <section className="map-pane" aria-label="Change map" inert={narrow && open}>
-        <div className="map-toolbar">
-          <h1>Change map</h1>
-          {!!outside.length && (
-            <button
-              aria-expanded={preferences.listOpen}
-              aria-controls="outside-files"
-              onClick={() =>
-                setPreferences((current) => ({ ...current, listOpen: !current.listOpen }))
-              }
-            >
-              Other files <span>{outside.length}</span>
-            </button>
-          )}
-          {selected && !open && (
-            <button onClick={() => setPaneOpen(true)}>Open selected file</button>
-          )}
-          {refresh}
-        </div>
         <div className="map-body">
-          {!!outside.length && preferences.listOpen && (
+          {!!outside.length && (
             <section
               id="outside-files"
-              className="unanalyzed"
+              className={`unanalyzed${preferences.listOpen ? " is-open" : ""}`}
               aria-label="Unanalyzed changed files"
+              inert={!preferences.listOpen}
+              aria-hidden={!preferences.listOpen}
             >
-              <h2>Outside dependency analysis</h2>
-              <p>These files are not analyzed; this does not mean they have no dependencies.</p>
-              <div>
+              <div className="unanalyzed-heading">
+                <h2>
+                  Other files <span>{outside.length}</span>
+                </h2>
+                <p>Outside dependency analysis</p>
+              </div>
+              <div className="unanalyzed-list">
                 {outside.map((file) => (
                   <button
                     className={`unanalyzed-node ${file.status}`}
@@ -160,13 +154,34 @@ export function Workspace({
                     aria-pressed={selected === file.id}
                     onClick={() => select(file.id)}
                   >
-                    <span>{statusLabels[file.status]}</span>
+                    <StatusBadge status={file.status} />
                     <strong>{file.newPath ?? file.oldPath}</strong>
                     {file.change?.binary && <small>Binary</small>}
                   </button>
                 ))}
               </div>
             </section>
+          )}
+          {!!outside.length && (
+            <Button
+              className={`other-files-toggle${preferences.listOpen ? " is-open" : ""}`}
+              aria-label={
+                preferences.listOpen ? "Close Other files" : `Open Other files (${outside.length})`
+              }
+              aria-expanded={preferences.listOpen}
+              aria-controls="outside-files"
+              onClick={() =>
+                setPreferences((current) => ({ ...current, listOpen: !current.listOpen }))
+              }
+            >
+              <Files aria-hidden="true" />
+              <span>{preferences.listOpen ? "Close" : `Other files · ${outside.length}`}</span>
+            </Button>
+          )}
+          {selected && !open && (
+            <Button className="reopen-code" onClick={() => setPaneOpen(true)}>
+              Open selected file <ChevronRight aria-hidden="true" />
+            </Button>
           )}
           <Graph
             graph={snapshot.graph}
@@ -176,22 +191,6 @@ export function Workspace({
             resizing={resizing}
             suspended={narrow && open}
           />
-        </div>
-        <div className="legend" aria-label="Graph legend">
-          {Object.entries(statusLabels).map(([status, label]) =>
-            status === "unchanged" ? (
-              <span className="legend-unchanged" key={status}>
-                {label}
-              </span>
-            ) : (
-              <span className={`status-badge ${status}`} key={status}>
-                {label}
-              </span>
-            ),
-          )}
-          <small>
-            Reference source → target · Edges: + added · − dashed deleted · solid unchanged
-          </small>
         </div>
       </section>
       {open && (
@@ -238,18 +237,14 @@ export function Workspace({
             }}
           />
           <div id="code-panel" className="code-panel">
-            <div className="code-toolbar">
-              <span>CAPTURED CODE</span>
-              <button ref={closeButton} onClick={close}>
-                {narrow ? "← Back to graph" : "Close code pane ×"}
-              </button>
-            </div>
             <CodePane
               key={node.id}
               snapshot={snapshot}
               node={node}
               display={preferences.display}
-              onDisplayChange={(display) => setPreferences((current) => ({ ...current, display }))}
+              onClose={close}
+              closeButtonRef={closeButton}
+              narrow={narrow}
             />
           </div>
         </>
