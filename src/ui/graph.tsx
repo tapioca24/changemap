@@ -20,14 +20,9 @@ import { revealNode } from "./viewport.js";
 import type { MergedFileNode, ReviewGraph } from "../graph/model.js";
 import type { Settings } from "../shared/settings.js";
 import "@xyflow/react/dist/style.css";
+import { StatusBadge, statusLabels } from "./status-badge.js";
 
-export const statusLabels = {
-  added: "+ Added",
-  modified: "~ Modified",
-  deleted: "− Deleted",
-  renamed: "↗ Renamed",
-  unchanged: "· Unchanged",
-};
+export { statusLabels } from "./status-badge.js";
 export function references(graph: ReviewGraph, node: MergedFileNode) {
   return (["before", "after"] as const).flatMap((side) =>
     graph[side].references
@@ -61,9 +56,7 @@ const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileNodeData>>)
       }}
     >
       <Handle type="target" position={target} />
-      {data.file.status !== "unchanged" && (
-        <span className="node-status status-badge">{statusLabels[data.file.status]}</span>
-      )}
+      {data.file.status !== "unchanged" && <StatusBadge status={data.file.status} />}
       <strong title={path}>{path.split("/").pop()}</strong>
       {data.unresolved && <span className="unresolved">! Unresolved references</span>}
       <Handle type="source" position={source} />
@@ -392,7 +385,7 @@ export const Graph = memo(function Graph({
     );
   }
   return (
-    <div className="graph-canvas" aria-label="File dependency graph">
+    <div className="graph-canvas" role="group" aria-label="File dependency graph">
       <ReactFlow
         key={direction}
         nodes={displayedNodes}

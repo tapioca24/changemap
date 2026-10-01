@@ -205,14 +205,53 @@ test("diff is default; switching sides cannot display an older asynchronous resp
   render(createElement(CodePane, { snapshot, node: file("a.ts") }));
   expect(screen.getByLabelText("File diff").textContent).toContain("new");
   expect(screen.getByLabelText("File diff").textContent).not.toContain("+new");
-  fireEvent.click(screen.getByText("Before · full file"));
-  fireEvent.click(screen.getByText("After · full file"));
+  fireEvent.click(screen.getByRole("tab", { name: "Before" }));
+  fireEvent.click(screen.getByRole("tab", { name: "After" }));
   expect((await screen.findByLabelText("Full file")).textContent).toContain("captured after");
   await act(async () =>
     finishBefore(new Response(JSON.stringify({ encoding: "utf8", content: "obsolete before" }))),
   );
   expect(screen.getByLabelText("Full file").textContent).not.toContain("obsolete before");
   expect(fetcher.mock.calls[0][0]).toContain("snapshot=snapshot-1");
+});
+
+test.each([
+  ["unchanged", null],
+  ["renamed", ""],
+] as const)("%s file with identical code has no redundant tabs", async (status, patch) => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ encoding: "utf8", content: "same code" }))),
+  );
+  const original = file("a.ts");
+  const node = {
+    ...original,
+    status,
+    newPath: status === "renamed" ? "renamed.ts" : original.newPath,
+    change:
+      status === "renamed" ? { ...original.change!, status: "renamed" as const, patch } : null,
+  };
+  render(createElement(CodePane, { snapshot, node }));
+  expect(screen.queryByRole("tablist")).toBeNull();
+  expect((await screen.findByLabelText("Full file")).textContent).toContain("same code");
+  if (status === "renamed") {
+    fireEvent.click(screen.getByRole("button", { name: "File information" }));
+    expect(await screen.findByText(/Renamed from/)).toBeTruthy();
+  }
+});
+
+test("content tabs expose tab semantics and selected state", () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ encoding: "utf8", content: "captured" }))),
+  );
+  render(createElement(CodePane, { snapshot, node: file("a.ts") }));
+  const diff = screen.getByRole("tab", { name: "Diff" });
+  expect(diff.getAttribute("aria-selected")).toBe("true");
+  const before = screen.getByRole("tab", { name: "Before" });
+  fireEvent.click(before);
+  expect(before.getAttribute("aria-selected")).toBe("true");
+  expect(diff.getAttribute("aria-selected")).toBe("false");
 });
 
 test("code pane opens a working tree file and explains launch errors", async () => {
@@ -234,7 +273,8 @@ test("code pane opens a working tree file and explains launch errors", async () 
   render(createElement(CodePane, { snapshot, node: file("a.ts") }));
   const button = await screen.findByRole("button", { name: "Open in editor" });
   await vi.waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
-  expect(screen.getByText(/working tree file differs/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "File information" }));
+  expect(await screen.findByText(/working tree file differs/)).toBeTruthy();
   fireEvent.click(button);
   expect((await screen.findByRole("alert")).textContent).toContain("editor command not found");
   expect(
@@ -263,6 +303,8 @@ test("code pane disables editor action when the working tree file is absent", as
   );
   const deleted = { ...file("deleted.ts"), status: "deleted" as const, newPath: null };
   render(createElement(CodePane, { snapshot, node: deleted }));
+  await screen.findByRole("button", { name: "File information" });
+  fireEvent.click(screen.getByRole("button", { name: "File information" }));
   expect(await screen.findByText("File is absent from the working tree.")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Open in editor" }).hasAttribute("disabled")).toBe(
     true,
@@ -287,17 +329,31 @@ test("display controls switch split rows and whitespace patch while full files r
   };
   function Example() {
     const [display, setDisplay] = useState(defaultDiffDisplay);
-    return createElement(CodePane, { snapshot, node, display, onDisplayChange: setDisplay });
+    return createElement(
+      "div",
+      null,
+      createElement(
+        "button",
+        { onClick: () => setDisplay((current) => ({ ...current, layout: "split" })) },
+        "Choose split",
+      ),
+      createElement(
+        "button",
+        { onClick: () => setDisplay((current) => ({ ...current, ignoreWhitespace: true })) },
+        "Ignore whitespace",
+      ),
+      createElement(CodePane, { snapshot, node, display }),
+    );
   }
   render(createElement(Example));
-  fireEvent.click(screen.getByRole("button", { name: "Split diff" }));
+  fireEvent.click(screen.getByRole("button", { name: "Choose split" }));
   const diff = screen.getByLabelText("File diff");
   expect(diff.querySelectorAll(".split-row")).toHaveLength(1);
   expect(diff.querySelector(".line-delete")?.textContent).toContain("old");
   expect(diff.querySelector(".line-add")?.textContent).toContain("new");
-  fireEvent.click(screen.getByLabelText("Ignore whitespace"));
+  fireEvent.click(screen.getByRole("button", { name: "Ignore whitespace" }));
   expect(screen.getByText("No differences after ignoring whitespace.")).toBeTruthy();
-  fireEvent.click(screen.getByText("After · full file"));
+  fireEvent.click(screen.getByRole("tab", { name: "After" }));
   expect((await screen.findByLabelText("Full file")).textContent).toContain(
     "a very long captured line",
   );
@@ -323,7 +379,7 @@ test("deleted files start with old contents, and binary files explain unavailabl
   };
   render(createElement(CodePane, { snapshot, node }));
   expect(await screen.findByText(/Unsupported or invalid image format/)).toBeTruthy();
-  expect(screen.queryByText("After · full file")).toBeNull();
+  expect(screen.queryByRole("tab", { name: "After" })).toBeNull();
 });
 
 test("binary diff previews an available side and explains why the other side is unavailable", async () => {
@@ -356,12 +412,12 @@ test("binary diff previews an available side and explains why the other side is 
   expect(screen.getByText("32 × 16 px")).toBeTruthy();
   expect(screen.getByText(/10 MiB preview limit/)).toBeTruthy();
   expect(screen.queryByLabelText("Display settings")).toBeNull();
-  fireEvent.click(screen.getByText("Before · full file"));
+  fireEvent.click(screen.getByRole("tab", { name: "Before" }));
   expect(screen.getByAltText("Before file preview")).toBeTruthy();
   expect(screen.queryByText(/10 MiB preview limit/)).toBeNull();
   fireEvent.error(screen.getByAltText("Before file preview"));
   expect(screen.getByText("The browser could not decode this image.")).toBeTruthy();
-  fireEvent.click(screen.getByText("After · full file"));
+  fireEvent.click(screen.getByRole("tab", { name: "After" }));
   expect(screen.getByText(/10 MiB preview limit/)).toBeTruthy();
 });
 
@@ -450,6 +506,7 @@ test("rename paths and unresolved vs intentionally excluded references remain di
   };
   render(createElement(CodePane, { snapshot: { ...snapshot, graph }, node }));
   expect(screen.getByText("renamed.ts")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "File information" }));
   expect(screen.getByText("a.ts")).toBeTruthy();
   expect(screen.getByText(/1 unresolved · 1 intentionally excluded/)).toBeTruthy();
   expect(screen.getByText("Missing target")).toBeTruthy();

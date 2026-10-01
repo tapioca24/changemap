@@ -87,12 +87,12 @@ test("diff and full files use their own language tokens while change markers sta
   expect(diff.textContent).not.toContain("+const");
   expect(diff.textContent).not.toContain("+++ b/");
 
-  fireEvent.click(screen.getByText("Before · full file"));
+  fireEvent.click(screen.getByRole("tab", { name: "Before" }));
   const full = await screen.findByLabelText("Full file");
   expect(full.querySelector(".code-line span[style]")?.getAttribute("style")).toContain(
     "--test-javascript",
   );
-  fireEvent.click(screen.getByText("After · full file"));
+  fireEvent.click(screen.getByRole("tab", { name: "After" }));
   await waitFor(() =>
     expect(
       screen
@@ -137,7 +137,8 @@ test("copies each path of a renamed file and confirms success", async () => {
     true,
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Copy before.js" }));
+  fireEvent.click(screen.getByRole("button", { name: "File information" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Copy before.js" }));
   await waitFor(() => expect(writeText).toHaveBeenCalledWith("before.js"));
   expect(screen.getAllByRole("status").map((status) => status.textContent)).toContain(
     "Copied before.js",

@@ -4,9 +4,15 @@ import type { CapturedFile, ReviewSummary } from "../shared/review.js";
 import { request } from "./api.js";
 import { codeLanguage } from "./code-language.js";
 import { diffLines, sourceLines, splitDiffLines, type DiffLine } from "./code-lines.js";
-import { references, statusLabels } from "./graph.js";
+import { references } from "./graph.js";
 import { highlightFile } from "./highlight-client.js";
 import type { CodeToken, TokenLines } from "./highlight-engine.js";
+import { Tabs } from "@base-ui/react/tabs";
+import { Popover } from "@base-ui/react/popover";
+import { Button } from "@base-ui/react/button";
+import { Check, Copy, ExternalLink, Info, X } from "lucide-react";
+import { StatusBadge } from "./status-badge.js";
+import type { Ref } from "react";
 
 type Side = "before" | "after";
 type ImageState =
@@ -184,28 +190,7 @@ function CopyPathButton({ path }: { path: string }) {
         title={result === "copied" ? "Copied" : `Copy ${path}`}
         onClick={() => void copy()}
       >
-        {result === "copied" ? (
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            aria-hidden="true"
-          >
-            <path d="m5 12 4 4L19 6" />
-          </svg>
-        ) : (
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            aria-hidden="true"
-          >
-            <rect x="8" y="8" width="12" height="12" rx="2" />
-            <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
-          </svg>
-        )}
+        {result === "copied" ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
       </button>
       {result === "copied" && (
         <span className="sr-only" role="status">
@@ -300,12 +285,16 @@ export function CodePane({
   snapshot,
   node,
   display = defaultDiffDisplay,
-  onDisplayChange,
+  onClose,
+  closeButtonRef,
+  narrow = false,
 }: {
   snapshot: ReviewSummary;
   node: MergedFileNode;
   display?: DiffDisplaySettings;
-  onDisplayChange?: (next: DiffDisplaySettings) => void;
+  onClose?: () => void;
+  closeButtonRef?: Ref<HTMLButtonElement>;
+  narrow?: boolean;
 }) {
   const editorKey = JSON.stringify([snapshot.id, node.id]);
   const [editorFile, setEditorFile] = useState<{ key: string; value: EditorFileState } | null>(
@@ -358,9 +347,20 @@ export function CodePane({
       setEditorBusy(false);
     }
   }
-  const [mode, setMode] = useState<"diff" | "before" | "after">(
-    node.status === "deleted" ? "before" : node.status === "unchanged" ? "after" : "diff",
-  );
+  const hasTextChanges =
+    !!node.change?.patch &&
+    diffLines(node.change.patch).some((line) => line.kind === "add" || line.kind === "delete");
+  const singleView =
+    node.status === "unchanged" ||
+    (node.status === "renamed" && !hasTextChanges && !node.change?.binary);
+  const views: ("diff" | "before" | "after")[] = singleView
+    ? ["after"]
+    : [
+        ...(node.change ? ["diff" as const] : []),
+        ...(node.oldPath ? ["before" as const] : []),
+        ...(node.newPath ? ["after" as const] : []),
+      ];
+  const [mode, setMode] = useState<"diff" | "before" | "after">(singleView ? "after" : "diff");
   const beforeImage = useImageSide(snapshot.id, node.oldPath, "before");
   const afterImage = useImageSide(snapshot.id, node.newPath, "after");
   const before = useCodeSide(
@@ -405,206 +405,221 @@ export function CodePane({
         after.current?.error)
       : selected.tokens?.error;
   const refs = references(snapshot.graph, node);
+  const content = showImage ? (
+    <div className={`image-previews${mode === "diff" ? " image-previews-diff" : ""}`}>
+      {(mode === "diff" || mode === "before") && node.oldPath && (
+        <ImageCard side="before" state={beforeImage} />
+      )}
+      {(mode === "diff" || mode === "after") && node.newPath && (
+        <ImageCard side="after" state={afterImage} />
+      )}
+    </div>
+  ) : binary ? (
+    <p className="pane-note">
+      Text diff unavailable for this binary file. No binary preview is provided.
+    </p>
+  ) : current?.error && mode !== "diff" ? (
+    <p role="alert" className="pane-note">
+      {current.error}
+    </p>
+  ) : mode !== "diff" && !current ? (
+    <p role="status" className="pane-note">
+      Loading captured contents…
+    </p>
+  ) : noVisibleChanges ? (
+    <p className="pane-note">No differences after ignoring whitespace.</p>
+  ) : text ? (
+    <>
+      {highlightWarning && (
+        <p className="pane-note" role="status">
+          Syntax highlighting unavailable: {highlightWarning}
+        </p>
+      )}
+      <pre
+        className={`code${mode === "diff" ? " code-diff" : ""}${mode === "diff" && display.layout === "split" ? " code-split" : ""}`}
+        aria-label={mode === "diff" ? "File diff" : "Full file"}
+        tabIndex={0}
+      >
+        {mode === "diff" && display.layout === "split" ? (
+          <span className="split-grid">
+            {splitDiffLines(lines as DiffLine[]).map((row, i) =>
+              row.kind === "separator" ? (
+                <span className={`split-separator line-${row.line.kind}`} key={i}>
+                  {row.line.text}
+                </span>
+              ) : (
+                <span className="split-row" key={i}>
+                  {([row.before, row.after] as const).map((side, index) => (
+                    <span
+                      className={`split-cell${side ? ` line-${side.kind}` : " split-empty"}`}
+                      key={index}
+                    >
+                      <span className="line-number" aria-hidden="true">
+                        {index === 0 ? side?.beforeLine : side?.afterLine}
+                      </span>
+                      {side?.kind === "delete" || side?.kind === "add" ? (
+                        <span className="sr-only">
+                          {side.kind === "add" ? "Added line: " : "Deleted line: "}
+                        </span>
+                      ) : null}
+                      {side ? diffTokens(side, before.tokens?.tokens, after.tokens?.tokens) : null}
+                    </span>
+                  ))}
+                </span>
+              ),
+            )}
+          </span>
+        ) : (
+          lines.map((line, i) => (
+            <span
+              className={
+                mode === "diff" ? `code-line line-${(line as DiffLine).kind}` : "code-line"
+              }
+              key={i}
+            >
+              <span className="line-number" aria-hidden="true">
+                {mode === "diff" ? (line as DiffLine).beforeLine : i + 1}
+              </span>
+              {mode === "diff" && (
+                <span className="line-number" aria-hidden="true">
+                  {(line as DiffLine).afterLine}
+                </span>
+              )}
+              {mode === "diff" &&
+                ((line as DiffLine).kind === "add" || (line as DiffLine).kind === "delete") && (
+                  <span className="sr-only">
+                    {(line as DiffLine).kind === "add" ? "Added line: " : "Deleted line: "}
+                  </span>
+                )}
+              {mode === "diff"
+                ? diffTokens(line as DiffLine, before.tokens?.tokens, after.tokens?.tokens)
+                : codeTokens(line as string, selected.tokens?.tokens?.[i])}
+              {"\n"}
+            </span>
+          ))
+        )}
+      </pre>
+    </>
+  ) : (
+    <p className="pane-note">{mode === "diff" ? "No text changes." : "Empty file."}</p>
+  );
   return (
     <aside className="code-pane" aria-label="Code pane">
       <div className="pane-title">
-        <span className={`status ${node.status}`}>{statusLabels[node.status]}</span>
         <div className="path-copy-row">
-          <h2>{node.newPath ?? node.oldPath}</h2>
+          <StatusBadge status={node.status} />
+          <h2 title={node.newPath ?? node.oldPath ?? undefined}>{node.newPath ?? node.oldPath}</h2>
           <CopyPathButton path={(node.newPath ?? node.oldPath)!} />
         </div>
-        {node.status === "renamed" && (
-          <div className="path-copy-row renamed-path">
-            <p>
-              Renamed from <code>{node.oldPath}</code>
-            </p>
-            <CopyPathButton path={node.oldPath!} />
-          </div>
+        {(node.status === "renamed" ||
+          refs.length > 0 ||
+          (!node.analyzed.before && !node.analyzed.after) ||
+          currentEditorFile?.differs ||
+          (currentEditorFile && !currentEditorFile.available)) && (
+          <Popover.Root>
+            <Popover.Trigger className="icon-button" aria-label="File information">
+              <Info aria-hidden="true" />
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Positioner
+                className="review-popover-positioner"
+                side="bottom"
+                align="end"
+                sideOffset={8}
+              >
+                <Popover.Popup className="file-info-popup">
+                  <Popover.Title>File information</Popover.Title>
+                  {node.status === "renamed" && (
+                    <p>
+                      Renamed from <code>{node.oldPath}</code>{" "}
+                      <CopyPathButton path={node.oldPath!} />
+                    </p>
+                  )}
+                  {!node.analyzed.before && !node.analyzed.after && (
+                    <p>Dependency analysis is not available for this file.</p>
+                  )}
+                  {currentEditorFile?.differs && (
+                    <p>The working tree file differs from the captured code shown here.</p>
+                  )}
+                  {currentEditorFile && !currentEditorFile.available && (
+                    <p>{currentEditorFile.reason}</p>
+                  )}
+                  {refs.length > 0 && (
+                    <>
+                      <p>
+                        References · {refs.filter((ref) => ref.outcome === "unresolved").length}{" "}
+                        unresolved · {refs.filter((ref) => ref.outcome === "excluded").length}{" "}
+                        intentionally excluded
+                      </p>
+                      <ul>
+                        {refs.map((ref, i) => (
+                          <li key={i}>
+                            <strong>
+                              {ref.side} {ref.line}:{ref.column} · {ref.outcome}
+                            </strong>{" "}
+                            <code>{ref.expression}</code> <span>{ref.reason}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </Popover.Popup>
+              </Popover.Positioner>
+            </Popover.Portal>
+          </Popover.Root>
         )}
-        <button
+        <Button
           type="button"
-          className="open-editor-button"
+          className="icon-button open-editor-button"
+          aria-label="Open in editor"
+          title={currentEditorFile?.reason ?? "Open in editor"}
           disabled={!currentEditorFile?.available || editorBusy}
           onClick={openInEditor}
         >
-          {editorBusy ? "Opening…" : "Open in editor"}
-        </button>
-        {currentEditorFile?.differs && (
-          <p>The working tree file differs from the captured code shown here.</p>
-        )}
-        {currentEditorFile && !currentEditorFile.available && <p>{currentEditorFile.reason}</p>}
-        {editorMessage && <p role="status">{editorMessage}</p>}
-        {editorError && <p role="alert">{editorError}</p>}
-      </div>
-      {!showImage && (
-        <div className="display-settings" role="group" aria-label="Display settings">
-          <span>DISPLAY</span>
-          <button
-            type="button"
-            aria-label="Split diff"
-            aria-pressed={display.layout === "split"}
-            onClick={() =>
-              onDisplayChange?.({
-                ...display,
-                layout: display.layout === "split" ? "unified" : "split",
-              })
-            }
+          <ExternalLink aria-hidden="true" />
+        </Button>
+        {onClose && (
+          <Button
+            ref={closeButtonRef}
+            className="icon-button"
+            aria-label={narrow ? "Back to graph" : "Close code pane"}
+            onClick={onClose}
           >
-            {display.layout === "split" ? "Split" : "Unified"}
-          </button>
-          <label>
-            <input
-              type="checkbox"
-              checked={display.ignoreWhitespace}
-              onChange={(event) =>
-                onDisplayChange?.({ ...display, ignoreWhitespace: event.target.checked })
-              }
-            />
-            Ignore whitespace
-          </label>
-        </div>
-      )}
-      <div className="code-tabs" role="group" aria-label="Content view">
-        {node.change && (
-          <button aria-pressed={mode === "diff"} onClick={() => setMode("diff")}>
-            Diff
-          </button>
-        )}
-        {node.oldPath && (
-          <button aria-pressed={mode === "before"} onClick={() => setMode("before")}>
-            Before · full file
-          </button>
-        )}
-        {node.newPath && (
-          <button aria-pressed={mode === "after"} onClick={() => setMode("after")}>
-            After · full file
-          </button>
+            <X aria-hidden="true" />
+          </Button>
         )}
       </div>
-      {!node.analyzed.before && !node.analyzed.after && (
-        <p className="pane-note">Dependency analysis not available for this file.</p>
+      {editorMessage && (
+        <p className="code-inline-note" role="status">
+          {editorMessage}
+        </p>
       )}
-      {refs.length > 0 && (
-        <details
-          className="reference-details"
-          open={refs.some((ref) => ref.outcome === "unresolved")}
-        >
-          <summary>
-            References · {refs.filter((ref) => ref.outcome === "unresolved").length} unresolved ·{" "}
-            {refs.filter((ref) => ref.outcome === "excluded").length} intentionally excluded
-          </summary>
-          <ul>
-            {refs.map((ref, i) => (
-              <li key={i}>
-                <strong>
-                  {ref.side} {ref.line}:{ref.column} · {ref.outcome}
-                </strong>
-                <code>{ref.expression}</code>
-                <span>{ref.reason}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
+      {editorError && (
+        <p className="code-inline-note error" role="alert">
+          {editorError}
+        </p>
       )}
-      {showImage ? (
-        <div className={`image-previews${mode === "diff" ? " image-previews-diff" : ""}`}>
-          {(mode === "diff" || mode === "before") && node.oldPath && (
-            <ImageCard side="before" state={beforeImage} />
-          )}
-          {(mode === "diff" || mode === "after") && node.newPath && (
-            <ImageCard side="after" state={afterImage} />
-          )}
-        </div>
-      ) : binary ? (
-        <p className="pane-note">
-          Text diff unavailable for this binary file. No binary preview is provided.
-        </p>
-      ) : current?.error && mode !== "diff" ? (
-        <p role="alert" className="pane-note">
-          {current.error}
-        </p>
-      ) : mode !== "diff" && !current ? (
-        <p role="status" className="pane-note">
-          Loading captured contents…
-        </p>
-      ) : noVisibleChanges ? (
-        <p className="pane-note">No differences after ignoring whitespace.</p>
-      ) : text ? (
-        <>
-          {highlightWarning && (
-            <p className="pane-note" role="status">
-              Syntax highlighting unavailable: {highlightWarning}
-            </p>
-          )}
-          <pre
-            className={`code${mode === "diff" ? " code-diff" : ""}${mode === "diff" && display.layout === "split" ? " code-split" : ""}`}
-            aria-label={mode === "diff" ? "File diff" : "Full file"}
-            tabIndex={0}
-          >
-            {mode === "diff" && display.layout === "split" ? (
-              <span className="split-grid">
-                {splitDiffLines(lines as DiffLine[]).map((row, i) =>
-                  row.kind === "separator" ? (
-                    <span className={`split-separator line-${row.line.kind}`} key={i}>
-                      {row.line.text}
-                    </span>
-                  ) : (
-                    <span className="split-row" key={i}>
-                      {([row.before, row.after] as const).map((side, index) => (
-                        <span
-                          className={`split-cell${side ? ` line-${side.kind}` : " split-empty"}`}
-                          key={index}
-                        >
-                          <span className="line-number" aria-hidden="true">
-                            {index === 0 ? side?.beforeLine : side?.afterLine}
-                          </span>
-                          {side?.kind === "delete" || side?.kind === "add" ? (
-                            <span className="sr-only">
-                              {side.kind === "add" ? "Added line: " : "Deleted line: "}
-                            </span>
-                          ) : null}
-                          {side
-                            ? diffTokens(side, before.tokens?.tokens, after.tokens?.tokens)
-                            : null}
-                        </span>
-                      ))}
-                    </span>
-                  ),
-                )}
-              </span>
-            ) : (
-              lines.map((line, i) => (
-                <span
-                  className={
-                    mode === "diff" ? `code-line line-${(line as DiffLine).kind}` : "code-line"
-                  }
-                  key={i}
-                >
-                  <span className="line-number" aria-hidden="true">
-                    {mode === "diff" ? (line as DiffLine).beforeLine : i + 1}
-                  </span>
-                  {mode === "diff" && (
-                    <span className="line-number" aria-hidden="true">
-                      {(line as DiffLine).afterLine}
-                    </span>
-                  )}
-                  {mode === "diff" &&
-                    ((line as DiffLine).kind === "add" || (line as DiffLine).kind === "delete") && (
-                      <span className="sr-only">
-                        {(line as DiffLine).kind === "add" ? "Added line: " : "Deleted line: "}
-                      </span>
-                    )}
-                  {mode === "diff"
-                    ? diffTokens(line as DiffLine, before.tokens?.tokens, after.tokens?.tokens)
-                    : codeTokens(line as string, selected.tokens?.tokens?.[i])}
-                  {"\n"}
-                </span>
-              ))
-            )}
-          </pre>
-        </>
+      {views.length === 1 ? (
+        <div className="code-tab-panel">{content}</div>
       ) : (
-        <p className="pane-note">{mode === "diff" ? "No text changes." : "Empty file."}</p>
+        <Tabs.Root
+          className="code-tabs-root"
+          value={mode}
+          onValueChange={(value) => setMode(value as typeof mode)}
+        >
+          <Tabs.List className="code-tabs" aria-label="Content view">
+            {views.map((view) => (
+              <Tabs.Tab key={view} value={view}>
+                {view === "diff" ? "Diff" : view === "before" ? "Before" : "After"}
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+          {views.map((view) => (
+            <Tabs.Panel key={view} value={view} className="code-tab-panel">
+              {view === mode && content}
+            </Tabs.Panel>
+          ))}
+        </Tabs.Root>
       )}
     </aside>
   );
