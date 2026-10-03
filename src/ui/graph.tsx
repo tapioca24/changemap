@@ -58,6 +58,11 @@ const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileNodeData>>)
       <Handle type="target" position={target} />
       {data.file.status !== "unchanged" && <StatusBadge status={data.file.status} />}
       <strong title={path}>{path.split("/").pop()}</strong>
+      {data.directoryPath && (
+        <span className="file-directory" title={data.directoryPath}>
+          {data.directoryPath}
+        </span>
+      )}
       {data.unresolved && <span className="unresolved">! Unresolved references</span>}
       <Handle type="source" position={source} />
     </div>
@@ -256,6 +261,7 @@ function RevealSelection({
 export const Graph = memo(function Graph({
   graph,
   direction,
+  groupByDirectory,
   selected,
   onSelect,
   resizing = false,
@@ -263,6 +269,7 @@ export const Graph = memo(function Graph({
 }: {
   graph: ReviewGraph;
   direction: Settings["orientation"];
+  groupByDirectory: boolean;
   selected: string | null;
   onSelect(id: string): void;
   resizing?: boolean;
@@ -271,16 +278,17 @@ export const Graph = memo(function Graph({
   const [hovered, setHovered] = useState<{
     graph: ReviewGraph;
     direction: Settings["orientation"];
+    groupByDirectory: boolean;
     kind: "edge" | "node";
     id: string;
   } | null>(null);
   const { nodes, routes, fileBounds, failed } = useMemo(() => {
     try {
-      return { ...layoutElements(graph, direction), failed: false };
+      return { ...layoutElements(graph, direction, groupByDirectory), failed: false };
     } catch {
       return { nodes: [], routes: [], fileBounds: new Map(), failed: true };
     }
-  }, [graph, direction]);
+  }, [graph, direction, groupByDirectory]);
   const selectableNodes = useMemo(
     () =>
       nodes.map((node) =>
@@ -305,7 +313,12 @@ export const Graph = memo(function Graph({
     },
     [onSelect],
   );
-  const focus = hovered?.graph === graph && hovered.direction === direction ? hovered : null;
+  const focus =
+    hovered?.graph === graph &&
+    hovered.direction === direction &&
+    hovered.groupByDirectory === groupByDirectory
+      ? hovered
+      : null;
   const sourceFans = useMemo(
     () => edgeFans(graph.merged.edges, fileBounds, direction),
     [graph, direction, fileBounds],
@@ -387,7 +400,7 @@ export const Graph = memo(function Graph({
   return (
     <div className="graph-canvas" role="group" aria-label="File dependency graph">
       <ReactFlow
-        key={direction}
+        key={`${direction}:${groupByDirectory}`}
         nodes={displayedNodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -396,14 +409,17 @@ export const Graph = memo(function Graph({
         nodesConnectable={false}
         onNodeClick={onNodeClick}
         onNodeMouseEnter={(_, node) => {
-          if (node.type === "file") setHovered({ graph, direction, kind: "node", id: node.id });
+          if (node.type === "file")
+            setHovered({ graph, direction, groupByDirectory, kind: "node", id: node.id });
         }}
         onNodeMouseLeave={(_, node) => {
           setHovered((current) =>
             current?.kind === "node" && current.id === node.id ? null : current,
           );
         }}
-        onEdgeMouseEnter={(_, edge) => setHovered({ graph, direction, kind: "edge", id: edge.id })}
+        onEdgeMouseEnter={(_, edge) =>
+          setHovered({ graph, direction, groupByDirectory, kind: "edge", id: edge.id })
+        }
         onEdgeMouseLeave={(_, edge) => {
           setHovered((current) =>
             current?.kind === "edge" && current.id === edge.id ? null : current,

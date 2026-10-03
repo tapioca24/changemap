@@ -286,9 +286,13 @@ test("settings API validates requests, saves explicitly, and restores on server 
   const { request, server } = await serve(repo.root);
   const path = join(repo.root, ".git", "changemap-config.toml");
   const initial = await request("/api/settings").then((response) => response.json());
-  expect(initial.settings).toEqual({ theme: "catppuccin-mocha", orientation: "LR" });
+  expect(initial.settings).toEqual({
+    theme: "catppuccin-mocha",
+    orientation: "LR",
+    groupByDirectory: true,
+  });
   await expect(readFile(path)).rejects.toMatchObject({ code: "ENOENT" });
-  const settings = { theme: "kanagawa-lotus", orientation: "RL" };
+  const settings = { theme: "kanagawa-lotus", orientation: "RL", groupByDirectory: false };
   expect(
     (await request("/api/settings", { method: "POST", body: JSON.stringify(settings) })).status,
   ).toBe(403);

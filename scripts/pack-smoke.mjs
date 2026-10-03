@@ -108,15 +108,24 @@ async function testServer(installed) {
     }
     const config = join(temporary, ".git", "config-home", "changemap", "config.toml");
     const settings = await fetch(`${url}/api/settings`).then((response) => response.json());
-    assert.deepEqual(settings.settings, { theme: "catppuccin-mocha", orientation: "LR" });
+    assert.deepEqual(settings.settings, {
+      theme: "catppuccin-mocha",
+      orientation: "LR",
+      groupByDirectory: true,
+    });
     assert.equal(existsSync(config), false);
     const saved = await fetch(`${url}/api/settings`, {
       method: "POST",
       headers: { "X-Changemap-Request": "1", "Content-Type": "application/json" },
-      body: JSON.stringify({ theme: "catppuccin-latte", orientation: "BT" }),
+      body: JSON.stringify({
+        theme: "catppuccin-latte",
+        orientation: "BT",
+        groupByDirectory: false,
+      }),
     }).then((response) => response.json());
     assert.equal(saved.warning, null);
     assert.match(readFileSync(config, "utf8"), /theme = "catppuccin-latte"/);
+    assert.match(readFileSync(config, "utf8"), /groupByDirectory = false/);
     const snapshot = await fetch(`${url}/api/snapshot`).then((response) => response.json());
     assert.ok(snapshot.changes.some((change) => change.newPath === "example.ts"));
     assert.deepEqual(snapshot.graph.after.edges, [

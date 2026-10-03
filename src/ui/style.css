@@ -196,6 +196,16 @@ p {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.file-directory {
+  color: var(--subtext0);
+  font:
+    11px/1.3 "SFMono-Regular",
+    Consolas,
+    monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .directory-node {
   position: relative;
   width: 100%;

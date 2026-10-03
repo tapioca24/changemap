@@ -132,12 +132,14 @@ are downloaded. The first Go review can take longer while the helper is compiled
 
 ### Appearance
 
-Choose a theme and map direction in the toolbar. The 24 themes include Catppuccin
+Choose a theme, map direction, and directory grouping in the toolbar. The 24 themes include Catppuccin
 (Latte, Frappé, Macchiato, and Mocha), Tokyo Night, Rosé Pine, Vitesse, Kanagawa,
 and Everforest variants. Mocha remains the default; the default direction is left
 to right. The additional palettes are bundled with changemap and do not update
 automatically. See [theme sources and licenses](THIRD_PARTY_THEME_NOTICES.md).
 Settings are shared across projects and saved on the first UI setting change.
+With directory grouping off, files share one graph; files from the same directory
+are kept close within each dependency layer where possible.
 
 The configuration file is `$XDG_CONFIG_HOME/changemap/config.toml` when
 `XDG_CONFIG_HOME` is an absolute path, otherwise `~/.config/changemap/config.toml`
@@ -146,6 +148,7 @@ on all supported platforms.
 ```toml
 theme = "catppuccin-mocha" # e.g. tokyo-night-light, rose-pine-dawn, kanagawa-wave
 orientation = "LR" # LR | TB | RL | BT
+groupByDirectory = true # true | false
 ```
 
 For manual configuration, the theme values are:

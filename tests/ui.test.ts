@@ -167,6 +167,92 @@ test.each(["LR", "RL", "TB", "BT"] as const)(
     }
   },
 );
+test.each(["LR", "RL", "TB", "BT"] as const)(
+  "flat layout in %s places every file at the root with routed dependencies",
+  (direction) => {
+    const graph = {
+      ...snapshot.graph,
+      merged: {
+        nodes: [file("src/a.ts"), file("other/b.ts"), file("root.ts")],
+        edges: [{ source: "src/a.ts", target: "other/b.ts", status: "added" as const }],
+      },
+    };
+    const { nodes, routes, fileBounds } = layoutElements(graph, direction, false);
+    expect(nodes).toHaveLength(3);
+    expect(nodes.every((node) => node.type === "file" && node.parentId === undefined)).toBe(true);
+    expect(nodes.find((node) => node.id === "src/a.ts")).toMatchObject({
+      data: { directoryPath: "src" },
+    });
+    expect(nodes.find((node) => node.id === "root.ts")).toMatchObject({
+      data: { directoryPath: null },
+    });
+    const source = fileBounds.get("src/a.ts")!;
+    const target = fileBounds.get("other/b.ts")!;
+    expect(routes).toHaveLength(1);
+    expect(routes[0].length).toBeGreaterThanOrEqual(2);
+    expect(routes[0][0]).not.toEqual(routes[0].at(-1));
+    expect(source.position).not.toEqual(target.position);
+  },
+);
+test.each(["LR", "RL", "TB", "BT"] as const)(
+  "flat layout in %s keeps directory peers adjacent without hiding isolated files",
+  (direction) => {
+    const graph = {
+      ...snapshot.graph,
+      merged: {
+        nodes: [
+          file("src/a.ts"),
+          file("other/c.ts"),
+          file("src/b.ts"),
+          file("other/d.ts"),
+          file("root.ts"),
+          file("target.ts"),
+        ],
+        edges: [
+          { source: "src/a.ts", target: "target.ts", status: "added" as const },
+          { source: "other/c.ts", target: "target.ts", status: "added" as const },
+          { source: "src/b.ts", target: "target.ts", status: "added" as const },
+          { source: "other/d.ts", target: "target.ts", status: "added" as const },
+        ],
+      },
+    };
+    const { nodes, routes, fileBounds } = layoutElements(graph, direction, false);
+    const rankAxis = direction === "LR" || direction === "RL" ? "x" : "y";
+    const crossAxis = rankAxis === "x" ? "y" : "x";
+    const sources = nodes
+      .filter((node) => node.id !== "target.ts" && node.id !== "root.ts")
+      .sort((a, b) => a.position[crossAxis] - b.position[crossAxis]);
+    expect(new Set(sources.map((node) => node.position[rankAxis])).size).toBe(1);
+    const directoryOrder = sources.map((node) => node.id.split("/")[0]);
+    expect(Math.abs(directoryOrder.indexOf("src") - directoryOrder.lastIndexOf("src"))).toBe(1);
+    expect(Math.abs(directoryOrder.indexOf("other") - directoryOrder.lastIndexOf("other"))).toBe(1);
+    expect(nodes).toHaveLength(6);
+    expect(nodes.find((node) => node.id === "root.ts")).toBeTruthy();
+    for (const [index, node] of nodes.entries()) {
+      for (const other of nodes.slice(index + 1)) {
+        const separated =
+          node.position.x + node.width! <= other.position.x ||
+          other.position.x + other.width! <= node.position.x ||
+          node.position.y + node.height! <= other.position.y ||
+          other.position.y + other.height! <= node.position.y;
+        expect(separated).toBe(true);
+      }
+    }
+    expect(routes).toHaveLength(graph.merged.edges.length);
+    for (const [index, edge] of graph.merged.edges.entries()) {
+      const source = fileBounds.get(edge.source)!;
+      const target = fileBounds.get(edge.target)!;
+      const horizontal = rankAxis === "x";
+      const forward = direction === "LR" || direction === "TB";
+      expect(routes[index][0][rankAxis]).toBe(
+        source.position[rankAxis] + (forward ? (horizontal ? source.width : source.height) : 0),
+      );
+      expect(routes[index].at(-1)![rankAxis]).toBe(
+        target.position[rankAxis] + (forward ? 0 : horizontal ? target.width : target.height),
+      );
+    }
+  },
+);
 test("many dependencies across sibling directories keep every file and edge visible", () => {
   const nodes = Array.from({ length: 120 }, (_, index) =>
     file(`src/area-${index % 8}/file-${index}.ts`),
@@ -519,7 +605,13 @@ test("layout failure preserves access to every analyzed file instead of crashing
   });
   const onSelect = vi.fn();
   render(
-    createElement(Graph, { graph: snapshot.graph, direction: "LR", selected: null, onSelect }),
+    createElement(Graph, {
+      graph: snapshot.graph,
+      direction: "LR",
+      groupByDirectory: true,
+      selected: null,
+      onSelect,
+    }),
   );
   expect(screen.getByRole("alert").textContent).toContain("dependency map could not be displayed");
   expect(screen.getAllByRole("option")).toHaveLength(4);
@@ -544,7 +636,15 @@ test("directory headings are visible while only files can be selected", () => {
       edges: [],
     },
   };
-  render(createElement(Graph, { graph, direction: "LR", selected: null, onSelect }));
+  render(
+    createElement(Graph, {
+      graph,
+      direction: "LR",
+      groupByDirectory: true,
+      selected: null,
+      onSelect,
+    }),
+  );
   expect(screen.getByText("src")).toBeTruthy();
   expect(screen.getByText("deep")).toBeTruthy();
   expect(screen.getByText("index.ts")).toBeTruthy();
@@ -552,6 +652,64 @@ test("directory headings are visible while only files can be selected", () => {
   expect(onSelect).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Open src/deep/index.ts" }));
   expect(onSelect).toHaveBeenCalledWith("src/deep/index.ts");
+});
+
+test("flat graph shows the parent path separately and omits it for root files", () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  const graph = {
+    ...snapshot.graph,
+    merged: { nodes: [file("src/deep/index.ts"), file("root.ts")], edges: [] },
+  };
+  const onSelect = vi.fn();
+  render(
+    createElement(Graph, {
+      graph,
+      direction: "LR",
+      groupByDirectory: false,
+      selected: null,
+      onSelect,
+    }),
+  );
+  expect(screen.queryByText("deep")).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "Open src/deep/index.ts" }).querySelector("strong")
+      ?.textContent,
+  ).toBe("index.ts");
+  expect(screen.getByText("src/deep").classList.contains("file-directory")).toBe(true);
+  expect(
+    screen.getByRole("button", { name: "Open root.ts" }).querySelector(".file-directory"),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Open src/deep/index.ts" }));
+  expect(onSelect).toHaveBeenCalledWith("src/deep/index.ts");
+});
+
+test("switching grouping remounts the fitted canvas and retains the selected file", () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  const graph = {
+    ...snapshot.graph,
+    merged: { nodes: [file("src/index.ts")], edges: [] },
+  };
+  const props = { graph, direction: "LR" as const, selected: "src/index.ts", onSelect: vi.fn() };
+  const view = render(createElement(Graph, { ...props, groupByDirectory: true }));
+  const firstCanvas = view.container.querySelector(".react-flow");
+  expect(firstCanvas).toBeTruthy();
+  view.rerender(createElement(Graph, { ...props, groupByDirectory: false }));
+  expect(view.container.querySelector(".react-flow")).not.toBe(firstCanvas);
+  expect(view.container.querySelector(".react-flow__node.selected .file-node")).toBeTruthy();
 });
 
 test("mixed file states keep names visible with badges only on changed nodes", () => {
@@ -576,7 +734,13 @@ test("mixed file states keep names visible with badges only on changed nodes", (
   ];
   const graph = { ...snapshot.graph, merged: { nodes, edges } };
   const { container } = render(
-    createElement(Graph, { graph, direction: "LR", selected: "renamed.ts", onSelect: vi.fn() }),
+    createElement(Graph, {
+      graph,
+      direction: "LR",
+      groupByDirectory: true,
+      selected: "renamed.ts",
+      onSelect: vi.fn(),
+    }),
   );
   for (const status of statuses) {
     const node = screen.getByRole("button", { name: `Open ${status}.ts` });

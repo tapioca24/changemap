@@ -18,8 +18,12 @@ export class SettingsStore {
     const store = new SettingsStore(path);
     try {
       const value = { ...defaults, ...parse(await readFile(path, "utf8")) };
-      if (!validSettings(value)) throw new Error("Invalid theme or orientation.");
-      store.state.settings = { theme: value.theme, orientation: value.orientation };
+      if (!validSettings(value)) throw new Error("Invalid settings.");
+      store.state.settings = {
+        theme: value.theme,
+        orientation: value.orientation,
+        groupByDirectory: value.groupByDirectory,
+      };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
         store.blocked = true;
