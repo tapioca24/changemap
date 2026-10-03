@@ -113,31 +113,54 @@ test("CLI reports when it uses a port above the preferred port", async () => {
   const repo = await repository();
   await repo.write("file.ts", "A\n");
   await repo.commit();
-  const blocker = createTcpServer();
-  await new Promise<void>((resolve, reject) => {
-    blocker.once("error", reject);
-    blocker.listen(0, "127.0.0.1", () => {
-      blocker.off("error", reject);
-      resolve();
+  const close = (server: ReturnType<typeof createTcpServer>) =>
+    new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  let blocker: ReturnType<typeof createTcpServer> | undefined;
+  let preferredPort = 0;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const candidate = createTcpServer();
+    await new Promise<void>((resolve, reject) => {
+      candidate.once("error", reject);
+      candidate.listen(0, "127.0.0.1", resolve);
     });
-  });
-  try {
-    const address = blocker.address();
+    const address = candidate.address();
     if (!address || typeof address === "string") throw new Error("No listening address.");
-    const running = await launchCli(repo.root, [".", "--no-open", "--port", `${address.port}`]);
+    if (address.port === 65535) {
+      await close(candidate);
+      continue;
+    }
+    const probe = createTcpServer();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        probe.once("error", reject);
+        probe.listen(address.port + 1, "127.0.0.1", resolve);
+      });
+      await close(probe);
+      blocker = candidate;
+      preferredPort = address.port;
+      break;
+    } catch (error) {
+      await close(candidate);
+      if (!["EACCES", "EADDRINUSE"].includes((error as NodeJS.ErrnoException).code ?? ""))
+        throw error;
+    }
+  }
+  if (!blocker) throw new Error("Could not find adjacent ports for the CLI test.");
+  try {
+    const running = await launchCli(repo.root, [".", "--no-open", "--port", `${preferredPort}`]);
     try {
       const actual = Number(new URL(running.url).port);
-      expect(actual).toBeGreaterThan(address.port);
+      expect(actual).toBe(preferredPort + 1);
     } finally {
       await running.stop();
     }
     expect(running.output()).toContain(
-      `Port ${address.port} is in use; using ${new URL(running.url).port}.`,
+      `Port ${preferredPort} is in use; using ${new URL(running.url).port}.`,
     );
   } finally {
-    await new Promise<void>((resolve, reject) =>
-      blocker.close((error) => (error ? reject(error) : resolve())),
-    );
+    await close(blocker);
   }
 });
 
