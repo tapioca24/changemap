@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/tapioca24/changemap/main/.github/assets/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/tapioca24/changemap/main/.github/assets/logo-light.svg" alt="changemap" width="500" height="128">
+  </picture>
+</p>
+
 # changemap
 
 Understand code changes through file dependency maps.
