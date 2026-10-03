@@ -29,7 +29,8 @@ Comparisons:
 
 Options:
   --no-open      Print the URL without opening a browser
-  --port <n>     Listen on this port; default 0 selects a free port
+  --port <n>     Preferred port (default 18473); tries up to 99 higher ports if occupied
+                 Use 0 to let the OS select a free port
   --editor <cmd> Open files with this editor; defaults to VISUAL, then EDITOR
   --go-os <os>   Go target OS; default is the host OS
   --go-arch <a>  Go target architecture; default is the host architecture
@@ -74,6 +75,10 @@ Changes are captured until you explicitly refresh. Go analysis requires Go on PA
     console.log(
       `changemap: ${server.url}\nPress Ctrl+C to stop. Changes appear after explicit refresh.`,
     );
+    const selectedPort = Number(new URL(server.url).port);
+    if (options.port !== 0 && selectedPort !== options.port) {
+      console.log(`changemap: Port ${options.port} is in use; using ${selectedPort}.`);
+    }
     if (options.open) {
       try {
         await openBrowser(server.url);

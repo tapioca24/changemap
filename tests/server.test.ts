@@ -2,6 +2,7 @@ import { readFile, realpath, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { get } from "node:http";
+import { createServer as createTcpServer } from "node:net";
 import { afterEach, expect, test, vi } from "vitest";
 import { SnapshotSource } from "../src/git/snapshot.js";
 import { parseInput } from "../src/git/input.js";
@@ -30,6 +31,93 @@ async function serve(
   const request = (path: string, init?: RequestInit) => fetch(`${server.url}${path}`, init);
   return { session, server, request };
 }
+
+test("port zero keeps OS selection and invalid ports fail without retrying", async () => {
+  const repo = await repository();
+  const session = await ReviewSession.create(new SnapshotSource(repo.root, parseInput(["."])));
+  try {
+    const server = await startServer(session, { port: 0, assets });
+    servers.push(server);
+    expect(Number(new URL(server.url).port)).toBeGreaterThan(0);
+  } catch (error) {
+    await session.stop();
+    throw error;
+  }
+  const invalid = await ReviewSession.create(new SnapshotSource(repo.root, parseInput(["."])));
+  try {
+    await expect(startServer(invalid, { port: -1, assets })).rejects.toMatchObject({
+      code: "ERR_SOCKET_BAD_PORT",
+    });
+  } finally {
+    await invalid.stop();
+  }
+});
+
+test("an occupied port at 65535 fails without wrapping around", async () => {
+  const repo = await repository();
+  const blocker = createTcpServer();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      blocker.once("error", reject);
+      blocker.listen(65535, "127.0.0.1", resolve);
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+  }
+  try {
+    const session = await ReviewSession.create(new SnapshotSource(repo.root, parseInput(["."])));
+    try {
+      await expect(startServer(session, { port: 65535, assets })).rejects.toThrow(
+        "No free port from 65535 to 65535.",
+      );
+    } finally {
+      await session.stop();
+    }
+  } finally {
+    if (blocker.listening) {
+      await new Promise<void>((resolve, reject) =>
+        blocker.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  }
+});
+
+test("search stops after 100 occupied ports", async () => {
+  const repo = await repository();
+  const firstPort = 22000;
+  const blockers = [];
+  try {
+    for (let port = firstPort; port < firstPort + 100; port++) {
+      const blocker = createTcpServer();
+      try {
+        await new Promise<void>((resolve, reject) => {
+          blocker.once("error", reject);
+          blocker.listen(port, "127.0.0.1", resolve);
+        });
+        blockers.push(blocker);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+      }
+    }
+    const session = await ReviewSession.create(new SnapshotSource(repo.root, parseInput(["."])));
+    try {
+      await expect(startServer(session, { port: firstPort, assets })).rejects.toThrow(
+        `No free port from ${firstPort} to ${firstPort + 99}.`,
+      );
+    } finally {
+      await session.stop();
+    }
+  } finally {
+    await Promise.all(
+      blockers.map(
+        (blocker) =>
+          new Promise<void>((resolve, reject) =>
+            blocker.close((error) => (error ? reject(error) : resolve())),
+          ),
+      ),
+    );
+  }
+});
 
 test("editor API opens the selected working tree path and reports captured content differences", async () => {
   const repo = await repository();
@@ -272,12 +360,20 @@ test("shutdown releases its listening port and stops polling", async () => {
   expect(check).not.toHaveBeenCalled();
 });
 
-test("occupied ports produce an actionable error without replacing the existing server", async () => {
+test("occupied ports advance without replacing the existing server", async () => {
   const repo = await repository();
-  const { session, server } = await serve(repo.root);
-  await expect(
-    startServer(session, { assets, port: Number(new URL(server.url).port) }),
-  ).rejects.toMatchObject({ code: "EADDRINUSE" });
+  const { server } = await serve(repo.root);
+  const preferredPort = Number(new URL(server.url).port);
+  const session = await ReviewSession.create(new SnapshotSource(repo.root, parseInput(["."])));
+  try {
+    const next = await startServer(session, { assets, port: preferredPort });
+    servers.push(next);
+    expect(Number(new URL(next.url).port)).toBeGreaterThan(preferredPort);
+    expect(Number(new URL(next.url).port)).toBeLessThanOrEqual(preferredPort + 99);
+  } catch (error) {
+    await session.stop();
+    throw error;
+  }
   expect((await fetch(server.url)).status).toBe(200);
 });
 

@@ -59,9 +59,13 @@ They are compared directly, not from their merge base.
 
 ```sh
 npx changemap . --no-open    # print the URL without opening a browser
-npx changemap . --port 4321  # choose a port; otherwise a free port is selected
+npx changemap . --port 20000 # prefer this port; try the next if occupied
+npx changemap . --port 0     # let the OS choose a free port
 npx changemap --help
 ```
+
+By default, changemap prefers port 18473. If it is occupied, changemap tries higher
+ports in order (up to 100 ports total) and prints the URL it actually uses.
 
 ## Read the map
 
