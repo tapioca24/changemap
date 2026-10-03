@@ -57,6 +57,7 @@ export function savePreferences(preferences: WorkspacePreferences) {
 export function Workspace({
   snapshot,
   direction,
+  groupByDirectory,
   selected,
   onSelect,
   preferences,
@@ -64,6 +65,7 @@ export function Workspace({
 }: {
   snapshot: ReviewSummary;
   direction: Settings["orientation"];
+  groupByDirectory: boolean;
   selected: string | null;
   onSelect(id: string | null): void;
   preferences: WorkspacePreferences;
@@ -186,6 +188,7 @@ export function Workspace({
           <Graph
             graph={snapshot.graph}
             direction={direction}
+            groupByDirectory={groupByDirectory}
             selected={selected}
             onSelect={select}
             resizing={resizing}

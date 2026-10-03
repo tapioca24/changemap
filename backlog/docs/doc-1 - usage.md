@@ -3,7 +3,7 @@ id: doc-1
 title: usage
 type: guide
 created_date: '2026-09-23 15:07'
-updated_date: '2026-10-03 12:14'
+updated_date: '2026-10-03 17:53'
 ---
 # Usage guide
 
@@ -129,7 +129,11 @@ saved in the browser's `changemap.workspace` cookie so they survive the CLI's
 changing port.
 
 The graph uses Dagre layout with left-to-right, top-to-bottom, right-to-left, and
-bottom-to-top orientations. Arrows always point from the referencing file to its
+bottom-to-top orientations. Directory grouping is enabled by default. Turn it off
+to lay out all files together; nodes then show their parent directory below the
+filename. Files in the same directory stay near each other within dependency
+layers where possible. Switching modes fits the new graph while retaining the
+selected file. Arrows always point from the referencing file to its
 target. Node labels supplement status colors. Added edges have a `+ added` label;
 deleted edges have a `− deleted` label and a dashed line. Use the zoom and fit
 controls or pan the canvas. Select file buttons with Enter or Space.
@@ -142,7 +146,7 @@ New changes trigger a notification while the current graph and code remain
 fixed. Refresh replaces the entire captured comparison and clears file selection;
 a failed refresh preserves it and provides a retry action.
 
-Theme and direction changes apply immediately and are shared across projects.
+Theme, direction, and directory grouping changes apply immediately and are shared across projects.
 The bundled themes are Latte, Frappé, Macchiato, and Mocha (default); the default
 direction is LR. Settings are saved at `$XDG_CONFIG_HOME/changemap/config.toml`
 when `XDG_CONFIG_HOME` is an absolute path, otherwise at
@@ -152,6 +156,7 @@ does not create the file; the first UI setting change does.
 ```toml
 theme = "mocha" # latte | frappe | macchiato | mocha
 orientation = "LR" # LR | TB | RL | BT
+groupByDirectory = true # true | false
 ```
 
 Missing keys use defaults. Invalid TOML or unsupported values cause a warning and
@@ -159,7 +164,7 @@ start with defaults; settings then apply only to that server session and the
 original file is preserved. Saving failures also preserve the existing file and
 keep changes active in the UI with a warning. Writes use a temporary file and
 rename; unknown keys are retained, but comments and formatting are not. There are
-no project-specific overrides or theme/direction CLI flags.
+no project-specific overrides or CLI flags for these settings.
 
 ## TypeScript dependency analysis
 

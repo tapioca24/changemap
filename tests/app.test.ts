@@ -15,15 +15,17 @@ vi.mock("../src/ui/graph.js", async (original) => ({
   Graph: ({
     graph,
     direction,
+    groupByDirectory,
     onSelect,
   }: {
     graph: ReviewGraph;
     direction: string;
+    groupByDirectory: boolean;
     onSelect(id: string): void;
   }) =>
     createElement(
       "div",
-      { "aria-label": "Test graph", "data-direction": direction },
+      { "aria-label": "Test graph", "data-direction": direction, "data-grouped": groupByDirectory },
       ...graph.merged.nodes
         .filter((n) => n.analyzed.after || n.analyzed.before)
         .map((n) =>
@@ -110,7 +112,7 @@ function api(initial: ReviewSummary) {
           return response({ settings, warning: null });
         }
         return response({
-          settings: { theme: "catppuccin-mocha", orientation: "LR" },
+          settings: { theme: "catppuccin-mocha", orientation: "LR", groupByDirectory: true },
           warning: null,
         });
       }
@@ -219,9 +221,28 @@ test("theme and direction remain applied after failed saves and review continues
   fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
   expect(document.querySelector(".settings-warning-indicator")).toBeTruthy();
   expect(state.saved).toHaveLength(8);
-  expect(state.saved.at(-1)).toEqual({ theme: "catppuccin-mocha", orientation: "LR" });
+  expect(state.saved.at(-1)).toEqual({
+    theme: "catppuccin-mocha",
+    orientation: "LR",
+    groupByDirectory: true,
+  });
   fireEvent.click(screen.getByText("Open file.ts"));
   expect(addedCode()).toContain("one");
+});
+
+test("directory grouping applies immediately and is saved", async () => {
+  const state = api(snapshot("one", "src/file.ts"));
+  render(createElement(App));
+  fireEvent.click(await screen.findByText("Open src/file.ts"));
+  expect(addedCode()).toContain("one");
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  const checkbox = screen.getByRole("checkbox", { name: "Group files by directory" });
+  await waitFor(() => expect(checkbox.hasAttribute("disabled")).toBe(false));
+  expect(screen.getByLabelText("Test graph").getAttribute("data-grouped")).toBe("true");
+  fireEvent.click(checkbox);
+  expect(screen.getByLabelText("Test graph").getAttribute("data-grouped")).toBe("false");
+  expect(addedCode()).toContain("one");
+  await waitFor(() => expect(state.saved.at(-1)?.groupByDirectory).toBe(false));
 });
 
 test("all bundled themes appear in the existing selector and update the whole app", async () => {

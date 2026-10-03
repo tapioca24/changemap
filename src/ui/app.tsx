@@ -224,6 +224,7 @@ export function App() {
               <Workspace
                 snapshot={snapshot}
                 direction={settings.orientation}
+                groupByDirectory={settings.groupByDirectory}
                 selected={selected}
                 onSelect={setSelected}
                 preferences={preferences}

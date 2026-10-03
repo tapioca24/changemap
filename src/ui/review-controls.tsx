@@ -178,6 +178,23 @@ export function SettingsDialog({
                   <ChevronDown aria-hidden="true" />
                 </span>
               </label>
+              <label className="whitespace-choice">
+                <Checkbox.Root
+                  checked={settings.groupByDirectory}
+                  disabled={!ready}
+                  onCheckedChange={(checked) =>
+                    onSettingsChange({ ...settings, groupByDirectory: checked === true })
+                  }
+                  className="settings-checkbox"
+                >
+                  <Checkbox.Indicator className="settings-checkbox-indicator">
+                    <Check aria-hidden="true" />
+                  </Checkbox.Indicator>
+                </Checkbox.Root>
+                <span>
+                  <strong>Group files by directory</strong>
+                </span>
+              </label>
               <fieldset className="diff-layout-field">
                 <legend>Diff layout</legend>
                 <RadioGroup

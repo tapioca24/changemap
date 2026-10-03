@@ -3,10 +3,11 @@ import { layoutElements } from "../../src/ui/layout.ts";
 import { renderingFixture } from "./fixture.mjs";
 const size = Number(process.argv[2] ?? 1000);
 const shape = process.argv[3] ?? "layered";
+const groupByDirectory = process.argv[4] !== "flat";
 const fixture = renderingFixture(size, shape);
 const start = performance.now();
 try {
-  const result = layoutElements(fixture.graph, "LR");
+  const result = layoutElements(fixture.graph, "LR", groupByDirectory);
   const fileNodes = result.nodes.filter((node) => node.type === "file");
   const directoryNodes = result.nodes.filter((node) => node.type === "directory");
   const expectedDirectories = new Set();
@@ -16,7 +17,7 @@ try {
       expectedDirectories.add(parts.slice(0, depth).join("/"));
   }
   assert.equal(fileNodes.length, size);
-  assert.equal(directoryNodes.length, expectedDirectories.size);
+  assert.equal(directoryNodes.length, groupByDirectory ? expectedDirectories.size : 0);
   assert.equal(result.routes.length, fixture.graph.merged.edges.length);
   assert.ok(
     result.nodes.every(
@@ -34,6 +35,7 @@ try {
     JSON.stringify({
       size,
       shape,
+      groupByDirectory,
       nodes: fileNodes.length,
       directories: directoryNodes.length,
       routes: result.routes.length,
@@ -46,6 +48,7 @@ try {
     JSON.stringify({
       size,
       shape,
+      groupByDirectory,
       layoutMs: performance.now() - start,
       failure: String(error),
       maxRssMiB: process.resourceUsage().maxRSS / 1024,

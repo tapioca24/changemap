@@ -7,6 +7,7 @@ export type FileNodeData = {
   file: MergedFileNode;
   unresolved: boolean;
   direction: Settings["orientation"];
+  directoryPath: string | null;
   onSelect?: () => void;
 };
 
@@ -75,10 +76,14 @@ function routeBetween(
   ];
 }
 
-export function layoutElements(graph: ReviewGraph, direction: Settings["orientation"]) {
+export function layoutElements(
+  graph: ReviewGraph,
+  direction: Settings["orientation"],
+  groupByDirectory = true,
+) {
   const files = graph.merged.nodes.filter((node) => node.analyzed.before || node.analyzed.after);
   const directories = new Set<string>();
-  for (const file of files) {
+  for (const file of groupByDirectory ? files : []) {
     let path = parentPath(file.newPath ?? file.oldPath!);
     while (path !== null) {
       directories.add(path);
@@ -102,7 +107,7 @@ export function layoutElements(graph: ReviewGraph, direction: Settings["orientat
   const fileDirectories = new Map<string, string | null>();
   const boxes = new Map<string, Box>();
   for (const file of files) {
-    const parent = parentPath(file.newPath ?? file.oldPath!);
+    const parent = groupByDirectory ? parentPath(file.newPath ?? file.oldPath!) : null;
     fileDirectories.set(file.id, parent);
     boxes.set(file.id, { width: fileWidth, height: fileHeight });
     addChild(parent, file.id);
@@ -137,7 +142,8 @@ export function layoutElements(graph: ReviewGraph, direction: Settings["orientat
       const target = directChild(container, edge.target);
       if (source === null || target === null || source === target) return;
       layout.setEdge(source, target);
-      if (source === edge.source && target === edge.target) directEdges.push(index);
+      if (groupByDirectory && source === edge.source && target === edge.target)
+        directEdges.push(index);
     });
     dagre.layout(layout);
     for (const id of children.get(container) ?? []) {
@@ -158,6 +164,45 @@ export function layoutElements(graph: ReviewGraph, direction: Settings["orientat
       });
     }
   }
+  if (!groupByDirectory) {
+    // Reuse Dagre's rank slots, changing only their cross-axis order so nodes never overlap.
+    const rankAxis = direction === "LR" || direction === "RL" ? "x" : "y";
+    const crossAxis = rankAxis === "x" ? "y" : "x";
+    const directoryByFile = new Map(
+      files.map((file) => [file.id, parentPath(file.newPath ?? file.oldPath!) ?? ""]),
+    );
+    const directories = new Map<string, { total: number; count: number }>();
+    const ranks = new Map<number, typeof files>();
+    for (const file of files) {
+      const position = relative.get(file.id)!;
+      const directory = directoryByFile.get(file.id)!;
+      const score = directories.get(directory) ?? { total: 0, count: 0 };
+      score.total += position[crossAxis];
+      score.count++;
+      directories.set(directory, score);
+      const rank = ranks.get(position[rankAxis]) ?? [];
+      rank.push(file);
+      ranks.set(position[rankAxis], rank);
+    }
+    if ([...directories.values()].some((directory) => directory.count > 1)) {
+      const order = (fileId: string) => {
+        const directory = directories.get(directoryByFile.get(fileId)!)!;
+        return directory.total / directory.count;
+      };
+      for (const rank of ranks.values()) {
+        const slots = rank.map((file) => relative.get(file.id)![crossAxis]).sort((a, b) => a - b);
+        rank.sort(
+          (a, b) =>
+            order(a.id) - order(b.id) ||
+            directoryByFile.get(a.id)!.localeCompare(directoryByFile.get(b.id)!) ||
+            relative.get(a.id)![crossAxis] - relative.get(b.id)![crossAxis],
+        );
+        rank.forEach((file, index) => {
+          relative.get(file.id)![crossAxis] = slots[index];
+        });
+      }
+    }
+  }
   const absolute = new Map<string, Point>();
   for (const container of [null, ...paths]) {
     const origin = container === null ? { x: 0, y: 0 } : absolute.get(directoryId(container))!;
@@ -175,6 +220,8 @@ export function layoutElements(graph: ReviewGraph, direction: Settings["orientat
     });
   }
   const routes = graph.merged.edges.map((edge, index) => {
+    if (!groupByDirectory)
+      return routeBetween(fileBounds.get(edge.source)!, fileBounds.get(edge.target)!, direction);
     const local = localRoutes.get(index);
     if (local) {
       const origin =
@@ -215,7 +262,7 @@ export function layoutElements(graph: ReviewGraph, direction: Settings["orientat
   };
   const fileNodes: LayoutNode[] = files.map((file) => {
     const path = file.newPath ?? file.oldPath!;
-    const parent = parentPath(path);
+    const parent = groupByDirectory ? parentPath(path) : null;
     return {
       id: file.id,
       type: "file",
@@ -224,6 +271,7 @@ export function layoutElements(graph: ReviewGraph, direction: Settings["orientat
       data: {
         file,
         direction,
+        directoryPath: groupByDirectory ? null : parentPath(path),
         unresolved:
           (file.oldPath !== null && unresolved.before.has(file.oldPath)) ||
           (file.newPath !== null && unresolved.after.has(file.newPath)),
@@ -236,6 +284,10 @@ export function layoutElements(graph: ReviewGraph, direction: Settings["orientat
   return { nodes: [...directoryNodes, ...fileNodes], routes, fileBounds };
 }
 
-export function layoutGraph(graph: ReviewGraph, direction: Settings["orientation"]) {
-  return layoutElements(graph, direction).nodes;
+export function layoutGraph(
+  graph: ReviewGraph,
+  direction: Settings["orientation"],
+  groupByDirectory = true,
+) {
+  return layoutElements(graph, direction, groupByDirectory).nodes;
 }

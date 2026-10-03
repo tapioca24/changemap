@@ -29,22 +29,38 @@ test("startup creates nothing; first change saves and restart restores settings"
   const store = await SettingsStore.load(path);
   expect(store.state.settings).toEqual(defaults);
   expect(await readdir(root)).toEqual([]);
-  expect(await store.save({ theme: "everforest-light-medium", orientation: "BT" })).toEqual({
-    settings: { theme: "everforest-light-medium", orientation: "BT" },
+  expect(
+    await store.save({
+      theme: "everforest-light-medium",
+      orientation: "BT",
+      groupByDirectory: false,
+    }),
+  ).toEqual({
+    settings: { theme: "everforest-light-medium", orientation: "BT", groupByDirectory: false },
     warning: null,
   });
   expect((await SettingsStore.load(path)).state.settings).toEqual({
     theme: "everforest-light-medium",
     orientation: "BT",
+    groupByDirectory: false,
   });
   expect(await readdir(root)).toEqual(["config.toml"]);
 });
+test("existing config without directory grouping keeps the grouped default", async () => {
+  const { path } = await fixture();
+  await writeFile(path, 'theme = "catppuccin-latte"\norientation = "TB"\n');
+  expect((await SettingsStore.load(path)).state.settings).toEqual({
+    theme: "catppuccin-latte",
+    orientation: "TB",
+    groupByDirectory: true,
+  });
+});
 test.each(themes)("theme %s survives a settings store restart", async (theme) => {
   const { path } = await fixture();
-  await (await SettingsStore.load(path)).save({ theme, orientation: "LR" });
+  await (await SettingsStore.load(path)).save({ theme, orientation: "LR", groupByDirectory: true });
   expect((await SettingsStore.load(path)).state.settings.theme).toBe(theme);
 });
-test.each(["theme = [", 'theme = "unknown"', 'theme = "mocha"'])(
+test.each(["theme = [", 'theme = "unknown"', 'theme = "mocha"', 'groupByDirectory = "false"'])(
   "malformed settings are preserved: %s",
   async (text) => {
     const { path } = await fixture();
@@ -53,7 +69,8 @@ test.each(["theme = [", 'theme = "unknown"', 'theme = "mocha"'])(
     expect(store.state.warning).toContain("could not be loaded");
     expect(store.state.settings).toEqual(defaults);
     expect(
-      (await store.save({ theme: "catppuccin-frappe", orientation: "RL" })).settings.theme,
+      (await store.save({ theme: "catppuccin-frappe", orientation: "RL", groupByDirectory: false }))
+        .settings.theme,
     ).toBe("catppuccin-frappe");
     expect(await readFile(path, "utf8")).toBe(text);
   },
@@ -66,9 +83,10 @@ test("failed save preserves the old file and applies session settings", async ()
   await rm(path);
   await mkdir(path);
   await writeFile(join(path, "original"), "preserve");
-  expect((await store.save({ theme: "catppuccin-latte", orientation: "TB" })).warning).toContain(
-    "could not be saved",
-  );
+  expect(
+    (await store.save({ theme: "catppuccin-latte", orientation: "TB", groupByDirectory: false }))
+      .warning,
+  ).toContain("could not be saved");
   expect(store.state.settings.theme).toBe("catppuccin-latte");
   expect(await readFile(join(path, "original"), "utf8")).toBe("preserve");
 });
@@ -76,12 +94,13 @@ test("corruption after startup is preserved and queued saves finish in order", a
   const { path } = await fixture();
   const store = await SettingsStore.load(path);
   await Promise.all([
-    store.save({ theme: "catppuccin-latte", orientation: "TB" }),
-    store.save({ theme: "catppuccin-macchiato", orientation: "RL" }),
+    store.save({ theme: "catppuccin-latte", orientation: "TB", groupByDirectory: true }),
+    store.save({ theme: "catppuccin-macchiato", orientation: "RL", groupByDirectory: false }),
   ]);
   expect((await SettingsStore.load(path)).state.settings).toEqual({
     theme: "catppuccin-macchiato",
     orientation: "RL",
+    groupByDirectory: false,
   });
   await writeFile(path, "broken = [");
   expect((await store.save(defaults)).warning).toBeTruthy();
