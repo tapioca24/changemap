@@ -212,19 +212,43 @@ export async function startServer(
   });
   server.requestTimeout = 30_000;
   server.headersTimeout = 10_000;
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(options.port ?? 0, "127.0.0.1", () => {
-      server.off("error", reject);
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        reject(new Error("No listening address."));
-        return;
+  const preferredPort = options.port ?? 0;
+  const lastPort = preferredPort === 0 ? 0 : Math.min(preferredPort + 99, 65535);
+  for (let port = preferredPort; port <= lastPort; port++) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onError = (error: Error) => {
+          server.off("listening", onListening);
+          reject(error);
+        };
+        const onListening = () => {
+          server.off("error", onError);
+          const address = server.address();
+          if (!address || typeof address === "string") {
+            reject(new Error("No listening address."));
+            return;
+          }
+          origin = `http://127.0.0.1:${address.port}`;
+          resolve();
+        };
+        server.once("error", onError);
+        server.once("listening", onListening);
+        try {
+          server.listen(port, "127.0.0.1");
+        } catch (error) {
+          server.off("error", onError);
+          server.off("listening", onListening);
+          reject(error);
+        }
+      });
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+      if (port === lastPort) {
+        throw new Error(`No free port from ${preferredPort} to ${lastPort}.`, { cause: error });
       }
-      origin = `http://127.0.0.1:${address.port}`;
-      resolve();
-    });
-  });
+    }
+  }
   session.startPolling(options.pollIntervalMs);
   let closing: Promise<void> | undefined;
   return {

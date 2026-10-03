@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import metadata from "../package.json" with { type: "json" };
 import { dirname } from "node:path";
+import { createServer as createTcpServer } from "node:net";
 import { parseOptions } from "../src/cli/options.js";
 import { repository } from "./helpers/repository.js";
 import { launchCli } from "./helpers/cli.js";
@@ -55,8 +56,9 @@ test.each([
   expect(result.stderr).toContain("changemap:");
 });
 
-test("options default to opening a browser with a free port and support suppression", () => {
-  expect(parseOptions([])).toMatchObject({ command: "review", open: true, port: 0 });
+test("options default to the preferred port and support explicit OS selection", () => {
+  expect(parseOptions([])).toMatchObject({ command: "review", open: true, port: 18473 });
+  expect(parseOptions(["--port", "0"])).toMatchObject({ command: "review", port: 0 });
   expect(parseOptions(["--no-open", "working", "--port=4321"])).toMatchObject({
     command: "review",
     open: false,
@@ -105,6 +107,38 @@ test("built CLI starts the packaged React app for an empty review and keeps serv
     await running.stop();
   }
   await expect(fetch(running.url)).rejects.toThrow();
+});
+
+test("CLI reports when it uses a port above the preferred port", async () => {
+  const repo = await repository();
+  await repo.write("file.ts", "A\n");
+  await repo.commit();
+  const blocker = createTcpServer();
+  await new Promise<void>((resolve, reject) => {
+    blocker.once("error", reject);
+    blocker.listen(0, "127.0.0.1", () => {
+      blocker.off("error", reject);
+      resolve();
+    });
+  });
+  try {
+    const address = blocker.address();
+    if (!address || typeof address === "string") throw new Error("No listening address.");
+    const running = await launchCli(repo.root, [".", "--no-open", "--port", `${address.port}`]);
+    try {
+      const actual = Number(new URL(running.url).port);
+      expect(actual).toBeGreaterThan(address.port);
+    } finally {
+      await running.stop();
+    }
+    expect(running.output()).toContain(
+      `Port ${address.port} is in use; using ${new URL(running.url).port}.`,
+    );
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      blocker.close((error) => (error ? reject(error) : resolve())),
+    );
+  }
 });
 
 test.skipIf(process.platform === "win32")(
