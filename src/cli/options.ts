@@ -18,7 +18,7 @@ export function parseOptions(args: readonly string[]): CliOptions {
   if (args.length === 1 && ["--version", "-v"].includes(args[0])) return { command: "version" };
   const positional: string[] = [];
   let open = true;
-  let port = 0;
+  let port = 18473;
   let editor: string | undefined;
   const go: { os?: string; arch?: string; tags?: string[] } = {};
   for (let i = 0; i < args.length; i++) {

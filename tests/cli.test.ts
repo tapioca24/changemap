@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import metadata from "../package.json" with { type: "json" };
 import { dirname } from "node:path";
+import { createServer as createTcpServer } from "node:net";
 import { parseOptions } from "../src/cli/options.js";
 import { repository } from "./helpers/repository.js";
 import { launchCli } from "./helpers/cli.js";
@@ -55,8 +56,9 @@ test.each([
   expect(result.stderr).toContain("changemap:");
 });
 
-test("options default to opening a browser with a free port and support suppression", () => {
-  expect(parseOptions([])).toMatchObject({ command: "review", open: true, port: 0 });
+test("options default to the preferred port and support explicit OS selection", () => {
+  expect(parseOptions([])).toMatchObject({ command: "review", open: true, port: 18473 });
+  expect(parseOptions(["--port", "0"])).toMatchObject({ command: "review", port: 0 });
   expect(parseOptions(["--no-open", "working", "--port=4321"])).toMatchObject({
     command: "review",
     open: false,
@@ -105,6 +107,62 @@ test("built CLI starts the packaged React app for an empty review and keeps serv
     await running.stop();
   }
   await expect(fetch(running.url)).rejects.toThrow();
+});
+
+test("CLI reports when it uses a port above the preferred port", async () => {
+  const repo = await repository();
+  await repo.write("file.ts", "A\n");
+  await repo.commit();
+  const close = (server: ReturnType<typeof createTcpServer>) =>
+    new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  let blocker: ReturnType<typeof createTcpServer> | undefined;
+  let preferredPort = 0;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const candidate = createTcpServer();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        candidate.once("error", reject);
+        candidate.listen(20000 + attempt * 2, "127.0.0.1", resolve);
+      });
+    } catch (error) {
+      if (["EACCES", "EADDRINUSE"].includes((error as NodeJS.ErrnoException).code ?? "")) continue;
+      throw error;
+    }
+    const address = candidate.address();
+    if (!address || typeof address === "string") throw new Error("No listening address.");
+    const probe = createTcpServer();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        probe.once("error", reject);
+        probe.listen(address.port + 1, "127.0.0.1", resolve);
+      });
+      await close(probe);
+      blocker = candidate;
+      preferredPort = address.port;
+      break;
+    } catch (error) {
+      await close(candidate);
+      if (!["EACCES", "EADDRINUSE"].includes((error as NodeJS.ErrnoException).code ?? ""))
+        throw error;
+    }
+  }
+  if (!blocker) throw new Error("Could not find adjacent ports for the CLI test.");
+  try {
+    const running = await launchCli(repo.root, [".", "--no-open", "--port", `${preferredPort}`]);
+    try {
+      const actual = Number(new URL(running.url).port);
+      expect(actual).toBeGreaterThan(preferredPort);
+    } finally {
+      await running.stop();
+    }
+    expect(running.output()).toContain(
+      `Port ${preferredPort} is in use; using ${new URL(running.url).port}.`,
+    );
+  } finally {
+    await close(blocker);
+  }
 });
 
 test.skipIf(process.platform === "win32")(

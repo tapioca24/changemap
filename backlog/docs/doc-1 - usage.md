@@ -3,7 +3,7 @@ id: doc-1
 title: usage
 type: guide
 created_date: '2026-09-23 15:07'
-updated_date: '2026-09-26 08:44'
+updated_date: '2026-10-03 12:14'
 ---
 # Usage guide
 
@@ -28,8 +28,10 @@ Use `.`, `staged`, and `working` alone; they cannot be combined with a second in
 ### Options and server lifecycle
 
 - `--no-open` prints the URL without launching a browser.
-- `--port <number>` (or `--port=<number>`) selects a port from 0 to 65535.
-  The default, 0, chooses a free port.
+- `--port <number>` (or `--port=<number>`) prefers a port from 1 to 65535.
+  The default is 18473. If the port is occupied, changemap tries each higher port,
+  up to 100 ports in total and never beyond 65535. It reports the actual URL and
+  explains when it uses a different port. `--port 0` lets the OS choose a free port.
 - `--help` / `-h` and `--version` / `-v` are standalone commands.
 
 The server binds to `127.0.0.1`. If browser launch fails, open the printed URL

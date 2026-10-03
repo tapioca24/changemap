@@ -41,6 +41,7 @@ export async function launchCli(cwd: string, args: string[]) {
   });
   return {
     url,
+    output: () => stdout,
     async stop(signal: NodeJS.Signals = "SIGTERM") {
       child.kill(signal);
       const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
