@@ -5,9 +5,13 @@ status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-09 14:38'
-updated_date: '2026-10-09 15:01'
+updated_date: '2026-10-09 15:12'
 labels: []
 dependencies: []
+references:
+  - backlog/docs/assets/task-56-pane-width-1440.png
+  - backlog/docs/assets/task-56-pane-width-1800.png
+  - backlog/docs/assets/task-56-pane-width-mobile.png
 modified_files:
   - src/ui/workspace.tsx
   - tests/app.test.ts
@@ -55,10 +59,12 @@ ordinal: 37000
 実測結果とスクリーンショット: /private/tmp/changemap-pane-size-qa/（dimensions.json、migration.json、1440-fixed.png、1800-fixed.png、1100-fixed.png、390-full-width.png、1800-restored.png）。広い画面と狭い画面の画像を目視確認済み。
 
 ship-changeで最新origin/mainのGoパッケージ表示を取り込んだ。タスク番号重複はbacklog doctorの修復により今回のタスクをTASK-56へ変更し、既存のGoタスクTASK-55は保持した。設定読み込みの既定値とフォーカス処理を両方維持して競合を解消し、Goパッケージ一覧とコード表示で幅保持・一時縮小・復元を共有する回帰テストを追加した。
+
+最新main統合後のコミットce1d3e9で提出前検証を実施: pnpm typecheck、pnpm lint、pnpm format:check、pnpm test（18ファイル・253テスト）、pnpm benchmark:layout 1000（約1010ms）、pnpm test:pack がすべて成功。git diff --checkとbacklog doctorも成功。使用ガイドの未解消メタデータは新しいdocsコミットで修正済み。統合後の実ブラウザーで1440/1800px画面のコード800px維持、1100pxで774pxへの縮小とグラフ320px、390pxで全幅表示、1800pxへの復元と再読み込み後の800px保持を再確認し、画面資料3枚をリポジトリに保存・目視確認した。
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-ウィンドウ伸縮時にコードペインの指定px幅を保つよう変更した。表示領域が不足する場合だけ一時縮小し、広げた際に保存幅へ戻す。初回45%と旧割合設定の移行、狭い画面の全幅表示、1920px上限、操作後の永続化を維持。全234テスト、型検査・lint・整形確認、1000ノードのレイアウト検証、配布検証、実ブラウザーでの寸法・移行・復元の確認が成功した。
+コードペインの指定幅をpxで保持し、空間不足時だけ一時縮小して復元する。初回45%・旧割合設定の移行、960px未満の全幅表示、1920px上限、操作後の永続化に対応。最新mainのGoパッケージ表示を維持して統合し、パッケージ一覧とコードの幅共有も回帰テストで確認した。全253テスト、型検査・lint・整形確認、1000ノードのレイアウト検証、配布検証、実ブラウザーの検証、差分とBacklogの整合性チェックが成功。PR用スクリーンショット3枚を保存した。
 <!-- SECTION:FINAL_SUMMARY:END -->
