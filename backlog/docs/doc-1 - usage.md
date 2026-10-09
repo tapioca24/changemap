@@ -3,13 +3,7 @@ id: doc-1
 title: usage
 type: guide
 created_date: '2026-09-23 15:07'
-<<<<<<< HEAD
-updated_date: '2026-10-09 14:44'
-||||||| 6aaf163
-updated_date: '2026-10-03 17:53'
-=======
-updated_date: '2026-10-09 14:32'
->>>>>>> origin/main
+updated_date: '2026-10-09 15:02'
 ---
 # Usage guide
 
