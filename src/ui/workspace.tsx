@@ -8,11 +8,12 @@ import { StatusBadge } from "./status-badge.js";
 import { Button } from "@base-ui/react/button";
 
 const storageKey = "changemap.workspace";
+const minCodePanePixels = 320;
 const maxCodePanePixels = 1920;
-const maxCodePanePercentage = 70;
 // A cookie survives the CLI's ephemeral ports; store only these non-sensitive preferences.
 export interface WorkspacePreferences {
   width: number;
+  widthUnit: "px" | "%";
   listOpen: boolean;
   display: DiffDisplaySettings;
 }
@@ -27,11 +28,15 @@ export function loadPreferences(): WorkspacePreferences {
           ?.slice(storageKey.length + 1) ?? "null",
       ),
     );
+    const hasWidth = typeof value?.width === "number" && Number.isFinite(value.width);
+    const widthUnit = hasWidth && value?.widthUnit === "px" ? "px" : "%";
     return {
-      width:
-        typeof value?.width === "number" && Number.isFinite(value.width)
-          ? Math.min(maxCodePanePercentage, Math.max(0, value.width))
-          : 45,
+      width: hasWidth
+        ? widthUnit === "px"
+          ? Math.min(maxCodePanePixels, Math.max(minCodePanePixels, value.width))
+          : Math.min(70, Math.max(0, value.width))
+        : 45,
+      widthUnit,
       listOpen: typeof value?.listOpen === "boolean" ? value.listOpen : false,
       display: {
         layout: value?.display?.layout === "split" ? "split" : "unified",
@@ -42,7 +47,7 @@ export function loadPreferences(): WorkspacePreferences {
       },
     };
   } catch {
-    return { width: 45, listOpen: false, display: defaultDiffDisplay };
+    return { width: 45, widthUnit: "%", listOpen: false, display: defaultDiffDisplay };
   }
 }
 
@@ -85,18 +90,17 @@ export function Workspace({
   );
   const otherFilesWidth = narrow ? 220 : 280;
   const graphMinimum = preferences.listOpen && outside.length ? otherFilesWidth + 320 : 320;
-  const maximum = width
-    ? Math.max(
-        0,
-        Math.min(
-          maxCodePanePercentage,
-          (maxCodePanePixels / width) * 100,
-          narrow ? maxCodePanePercentage : ((width - graphMinimum - 6) / width) * 100,
-        ),
-      )
-    : maxCodePanePercentage;
-  const minimum = width ? Math.min(maximum, (320 / width) * 100) : 0;
-  const paneWidth = Math.min(maximum, Math.max(minimum, preferences.width));
+  const maximum =
+    width && !narrow
+      ? Math.max(0, Math.min(maxCodePanePixels, width - graphMinimum - 6))
+      : maxCodePanePixels;
+  const minimum = Math.min(maximum, minCodePanePixels);
+  const preferredWidth =
+    preferences.widthUnit === "px"
+      ? preferences.width
+      : Math.min(maxCodePanePixels, Math.max(minCodePanePixels, (width * preferences.width) / 100));
+  // Only the displayed width is constrained by available space; keep the preference for restoration.
+  const paneWidth = Math.min(maximum, Math.max(minimum, preferredWidth));
   useEffect(() => {
     const element = root.current!;
     const observer = new ResizeObserver(() => setWidth(element.clientWidth));
@@ -104,6 +108,13 @@ export function Workspace({
     setWidth(element.clientWidth);
     return () => observer.disconnect();
   }, []);
+  useEffect(() => {
+    // Wait for the first wide-screen opening before converting defaults or legacy percentages.
+    if (!open || width < 960 || preferences.widthUnit === "px") return;
+    setPreferences((current) =>
+      current.widthUnit === "px" ? current : { ...current, width: preferredWidth, widthUnit: "px" },
+    );
+  }, [open, width, preferences.widthUnit, preferredWidth, setPreferences]);
   useEffect(() => {
     if (open && narrow) closeButton.current?.focus();
   }, [open, narrow]);
@@ -124,13 +135,14 @@ export function Workspace({
     setPreferences((current) => ({
       ...current,
       width: Math.min(maximum, Math.max(minimum, next)),
+      widthUnit: "px",
     }));
   }
   return (
     <div
       ref={root}
       className={`workspace${open ? " pane-open" : ""}${resizing ? " resizing" : ""}`}
-      style={{ "--pane-width": `${paneWidth}%` } as CSSProperties}
+      style={{ "--pane-width": `${paneWidth}px` } as CSSProperties}
     >
       <section className="map-pane" aria-label="Change map" inert={narrow && open}>
         <div className="map-body">
@@ -206,6 +218,7 @@ export function Workspace({
             aria-valuemin={minimum}
             aria-valuemax={maximum}
             aria-valuenow={paneWidth}
+            aria-valuetext={`${Math.round(paneWidth)} pixels`}
             aria-controls="code-panel"
             tabIndex={0}
             onPointerDown={(event) => {
@@ -216,9 +229,7 @@ export function Workspace({
             }}
             onPointerMove={(event) => {
               if (resizing && width)
-                resize(
-                  ((root.current!.getBoundingClientRect().right - event.clientX) / width) * 100,
-                );
+                resize(root.current!.getBoundingClientRect().right - event.clientX);
             }}
             onPointerUp={(event) => {
               event.currentTarget.releasePointerCapture(event.pointerId);
@@ -228,8 +239,8 @@ export function Workspace({
             onLostPointerCapture={() => setResizing(false)}
             onKeyDown={(event) => {
               const next = {
-                ArrowLeft: paneWidth + 2,
-                ArrowRight: paneWidth - 2,
+                ArrowLeft: paneWidth + 20,
+                ArrowRight: paneWidth - 20,
                 Home: minimum,
                 End: maximum,
               }[event.key];

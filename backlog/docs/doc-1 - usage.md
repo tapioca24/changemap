@@ -3,7 +3,7 @@ id: doc-1
 title: usage
 type: guide
 created_date: '2026-09-23 15:07'
-updated_date: '2026-10-03 17:53'
+updated_date: '2026-10-09 14:44'
 ---
 # Usage guide
 
@@ -98,8 +98,16 @@ Select a file in the change map to read its diff or captured before/after conten
 Deleted files initially show their old full contents; unchanged neighbors show
 full contents. Renames retain both paths. Supported images show a preview instead
 of a text diff. Other binary files show why a preview is unavailable. Files outside
-dependency analysis appear in a separate area. On wide screens, the code pane is
-limited to the smaller of 55% of the workspace or 1440px.
+dependency analysis appear in a separate area. On wide screens, the code pane
+remembers its width in pixels (up to 1920px).
+Window resizing changes the graph area; the code pane only shrinks temporarily
+when needed to leave at least 320px for the graph, then restores its remembered
+width when space is available. The Other files list is reserved separately.
+Drag the divider or use its arrow keys to adjust the width; Home and End choose
+the available minimum and maximum. The width survives reloads. The initial
+width is 45% of the workspace on the first wide-screen opening, and previously
+saved percentage widths are converted to pixels once. Below 960px, the code pane
+uses the full width and switches with the graph.
 
 PNG, JPEG, GIF, and WebP are identified from their bytes, even when the filename
 has another extension. Animated GIF and WebP play normally. Diff shows the old

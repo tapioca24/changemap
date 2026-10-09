@@ -304,26 +304,170 @@ test("pane starts closed, supports keyboard resize, remembers width and returns 
   expect(screen.queryByLabelText("Wrap lines")).toBeNull();
   expect(document.cookie).toContain("changemap.workspace=");
   const separator = screen.getByRole("separator");
-  expect(separator.getAttribute("aria-valuenow")).toBe("45");
-  fireEvent.keyDown(separator, { key: "End" });
-  expect(separator.getAttribute("aria-valuenow")).toBe("70");
+  expect(separator.getAttribute("aria-valuenow")).toBe("648");
+  expect(separator.getAttribute("aria-valuetext")).toBe("648 pixels");
+  fireEvent.keyDown(separator, { key: "Home" });
+  expect(separator.getAttribute("aria-valuenow")).toBe("320");
   fireEvent.keyDown(separator, { key: "ArrowLeft" });
-  expect(separator.getAttribute("aria-valuenow")).toBe("70");
+  expect(separator.getAttribute("aria-valuenow")).toBe("340");
+  fireEvent.keyDown(separator, { key: "ArrowRight" });
+  expect(separator.getAttribute("aria-valuenow")).toBe("320");
+  fireEvent.keyDown(separator, { key: "End" });
+  expect(separator.getAttribute("aria-valuenow")).toBe("1114");
+  fireEvent.keyDown(separator, { key: "ArrowLeft" });
+  expect(separator.getAttribute("aria-valuenow")).toBe("1114");
   fireEvent.click(screen.getByRole("button", { name: /Close code pane/ }));
   expect(screen.queryByLabelText("Code pane")).toBeNull();
   expect(screen.getByText("Open file.ts")).toBe(file);
   fireEvent.click(screen.getByText("Open selected file"));
-  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("70");
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("1114");
   view.unmount();
+  measuredWidth = 1800;
   render(createElement(App));
   fireEvent.click(await screen.findByText("Open file.ts"));
-  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("70");
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("1114");
   fireEvent.click(screen.getByRole("button", { name: "Settings" }));
   expect(screen.getByRole("radio", { name: /Split/ }).getAttribute("aria-checked")).toBe("true");
   expect(screen.queryByLabelText("Wrap lines")).toBeNull();
 });
 
-test("wide screens cap the code pane at 1920px without discarding a saved 70% preference", async () => {
+test("legacy percentages migrate once and retain their pixel width across resizing and reloads", async () => {
+  measuredWidth = 1400;
+  document.cookie = `changemap.workspace=${encodeURIComponent(JSON.stringify({ width: 60, listOpen: true }))}; Path=/`;
+  api(snapshot("one", "file.ts"));
+  const view = render(createElement(App));
+  fireEvent.click(await screen.findByText("Open file.ts"));
+  const workspace = screen.getByLabelText("Change map").parentElement!;
+  expect(workspace.style.getPropertyValue("--pane-width")).toBe("840px");
+  expect(decodeURIComponent(document.cookie)).toContain('"width":840,"widthUnit":"px"');
+  act(() => {
+    measuredWidth = 1800;
+    resizeWorkspace();
+  });
+  expect(workspace.style.getPropertyValue("--pane-width")).toBe("840px");
+  view.unmount();
+  measuredWidth = 2000;
+  render(createElement(App));
+  fireEvent.click(await screen.findByText("Open file.ts"));
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("840");
+});
+
+test("initial width is set when first opened on a wide screen, rather than when the page loads", async () => {
+  api(snapshot("one", "file.ts"));
+  render(createElement(App));
+  const file = await screen.findByText("Open file.ts");
+  act(() => {
+    measuredWidth = 1800;
+    resizeWorkspace();
+  });
+  fireEvent.click(file);
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("810");
+  act(() => {
+    measuredWidth = 2000;
+    resizeWorkspace();
+  });
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("810");
+});
+
+test.each([undefined, 60])(
+  "narrow startup defers converting %s until the first wide screen",
+  async (width) => {
+    measuredWidth = 390;
+    if (width !== undefined)
+      document.cookie = `changemap.workspace=${encodeURIComponent(JSON.stringify({ width }))}; Path=/`;
+    api(snapshot("one", "file.ts"));
+    render(createElement(App));
+    fireEvent.click(await screen.findByText("Open file.ts"));
+    expect(screen.getByRole("button", { name: /Back to graph/ })).toBeTruthy();
+    expect(decodeURIComponent(document.cookie)).toContain('"widthUnit":"%"');
+    act(() => {
+      measuredWidth = 959;
+      resizeWorkspace();
+    });
+    expect(decodeURIComponent(document.cookie)).toContain('"widthUnit":"%"');
+    act(() => {
+      measuredWidth = 960;
+      resizeWorkspace();
+    });
+    const preferred = (960 * (width ?? 45)) / 100;
+    expect(decodeURIComponent(document.cookie)).toContain(`"width":${preferred},"widthUnit":"px"`);
+    act(() => {
+      measuredWidth = 1440;
+      resizeWorkspace();
+    });
+    expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(String(preferred));
+  },
+);
+
+test("pixel widths temporarily shrink to fit and restore without overwriting the saved preference", async () => {
+  document.cookie = `changemap.workspace=${encodeURIComponent(JSON.stringify({ width: 800, widthUnit: "px" }))}; Path=/`;
+  api(snapshot("one", "file.ts"));
+  const view = render(createElement(App));
+  fireEvent.click(await screen.findByText("Open file.ts"));
+  const workspace = screen.getByLabelText("Change map").parentElement!;
+  for (const [width, expected] of [
+    [1800, 800],
+    [1100, 774],
+    [960, 634],
+  ]) {
+    act(() => {
+      measuredWidth = width;
+      resizeWorkspace();
+    });
+    expect(workspace.style.getPropertyValue("--pane-width")).toBe(`${expected}px`);
+    expect(decodeURIComponent(document.cookie)).toContain('"width":800,"widthUnit":"px"');
+  }
+  view.unmount();
+  const reloaded = render(createElement(App));
+  fireEvent.click(await screen.findByText("Open file.ts"));
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("634");
+  act(() => {
+    measuredWidth = 390;
+    resizeWorkspace();
+  });
+  expect(screen.getByRole("button", { name: /Back to graph/ })).toBeTruthy();
+  act(() => {
+    measuredWidth = 1800;
+    resizeWorkspace();
+  });
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("800");
+  reloaded.unmount();
+});
+
+test("pointer resizing stores pixels using the workspace right edge", async () => {
+  vi.stubGlobal("PointerEvent", MouseEvent);
+  api(snapshot("one", "file.ts"));
+  const view = render(createElement(App));
+  fireEvent.click(await screen.findByText("Open file.ts"));
+  const separator = screen.getByRole("separator");
+  const workspace = screen.getByLabelText("Change map").parentElement!;
+  vi.spyOn(workspace, "getBoundingClientRect").mockReturnValue({
+    x: 100,
+    y: 0,
+    left: 100,
+    right: 1540,
+    top: 0,
+    bottom: 800,
+    width: 1440,
+    height: 800,
+    toJSON() {},
+  });
+  Object.assign(separator, { setPointerCapture: vi.fn(), releasePointerCapture: vi.fn() });
+  fireEvent.pointerMove(separator, { clientX: 700 });
+  expect(separator.getAttribute("aria-valuenow")).toBe("648");
+  fireEvent.pointerDown(separator, { button: 0 });
+  fireEvent.pointerMove(separator, { clientX: 700 });
+  fireEvent.pointerUp(separator);
+  expect(separator.getAttribute("aria-valuenow")).toBe("840");
+  expect(decodeURIComponent(document.cookie)).toContain('"width":840,"widthUnit":"px"');
+  view.unmount();
+  measuredWidth = 2000;
+  render(createElement(App));
+  fireEvent.click(await screen.findByText("Open file.ts"));
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("840");
+});
+
+test("wide screens cap the code pane at 1920px and restore that pixel width", async () => {
   measuredWidth = 3200;
   document.cookie = `changemap.workspace=${encodeURIComponent(JSON.stringify({ width: 70, listOpen: true }))}; Path=/`;
   api(snapshot("one", "file.ts"));
@@ -331,22 +475,26 @@ test("wide screens cap the code pane at 1920px without discarding a saved 70% pr
   fireEvent.click(await screen.findByText("Open file.ts"));
   const separator = screen.getByRole("separator");
   const workspace = screen.getByLabelText("Change map").parentElement!;
-  expect(separator.getAttribute("aria-valuemax")).toBe("60");
-  expect(separator.getAttribute("aria-valuenow")).toBe("60");
-  expect(workspace.style.getPropertyValue("--pane-width")).toBe("60%");
+  expect(separator.getAttribute("aria-valuemax")).toBe("1920");
+  expect(separator.getAttribute("aria-valuenow")).toBe("1920");
+  expect(workspace.style.getPropertyValue("--pane-width")).toBe("1920px");
   act(() => {
     measuredWidth = 2560;
     resizeWorkspace();
   });
-  expect(separator.getAttribute("aria-valuemax")).toBe("70");
-  expect(separator.getAttribute("aria-valuenow")).toBe("70");
-  expect(workspace.style.getPropertyValue("--pane-width")).toBe("70%");
+  expect(separator.getAttribute("aria-valuemax")).toBe("1920");
+  expect(separator.getAttribute("aria-valuenow")).toBe("1920");
+  expect(workspace.style.getPropertyValue("--pane-width")).toBe("1920px");
+  act(() => {
+    measuredWidth = 2200;
+    resizeWorkspace();
+  });
+  expect(separator.getAttribute("aria-valuenow")).toBe("1874");
   act(() => {
     measuredWidth = 3200;
     resizeWorkspace();
   });
-  fireEvent.keyDown(separator, { key: "End" });
-  expect(separator.getAttribute("aria-valuenow")).toBe("60");
+  expect(separator.getAttribute("aria-valuenow")).toBe("1920");
 });
 
 test("open Other files leaves at least 320px for the graph beside the code pane", async () => {
@@ -367,7 +515,12 @@ test("open Other files leaves at least 320px for the graph beside the code pane"
   fireEvent.click(await screen.findByText("README.md"));
   const workspace = screen.getByLabelText("Change map").parentElement!;
   const paneWidth = Number.parseFloat(workspace.style.getPropertyValue("--pane-width"));
-  expect(measuredWidth * (1 - paneWidth / 100) - 280 - 6).toBeGreaterThanOrEqual(319.9);
+  expect(measuredWidth - paneWidth - 280 - 6).toBe(320);
+  fireEvent.click(screen.getByRole("button", { name: /Close Other files/ }));
+  expect(workspace.style.getPropertyValue("--pane-width")).toBe("1008px");
+  fireEvent.click(screen.getByRole("button", { name: /Open Other files/ }));
+  expect(workspace.style.getPropertyValue("--pane-width")).toBe("834px");
+  expect(decodeURIComponent(document.cookie)).toContain('"width":1008,"widthUnit":"px"');
 });
 
 test("narrow screen returns to the graph without losing selection or remounting it", async () => {
