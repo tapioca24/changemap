@@ -14,6 +14,7 @@ async function main() {
 
 Usage:
   changemap [target] [compare-with] [--no-open] [--port <number>] [--editor <command>]
+  changemap <source> <target> --merge-base
   changemap . | staged | working
   changemap --help
   changemap --version
@@ -29,6 +30,8 @@ Comparisons:
 
 Options:
   --no-open      Print the URL without opening a browser
+  --merge-base   Compare the merge base of two revisions to the first revision
+                 Requires <source> <target>; uses local Git history
   --port <n>     Preferred port (default 18473); tries up to 99 higher ports if occupied
                  Use 0 to let the OS select a free port
   --editor <cmd> Open files with this editor; defaults to VISUAL, then EDITOR

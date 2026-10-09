@@ -44,18 +44,35 @@ changemap .
 Run these commands inside the repository. With a global installation, replace
 `npx changemap` with `changemap`.
 
-| Command                      | Before → after                                                  |
-| ---------------------------- | --------------------------------------------------------------- |
-| `npx changemap .`            | HEAD → working tree (all local changes)                         |
-| `npx changemap staged`       | HEAD → index (staged changes)                                   |
-| `npx changemap working`      | Index → working tree (unstaged changes)                         |
-| `npx changemap`              | HEAD's first parent → HEAD                                      |
-| `npx changemap @`            | Same as the default                                             |
-| `npx changemap feature`      | The branch tip's first parent → its tip; a commit ID also works |
-| `npx changemap feature main` | `main` → `feature`                                              |
+| Command                                   | Before → after                                                  |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| `npx changemap .`                         | HEAD → working tree (all local changes)                         |
+| `npx changemap staged`                    | HEAD → index (staged changes)                                   |
+| `npx changemap working`                   | Index → working tree (unstaged changes)                         |
+| `npx changemap`                           | HEAD's first parent → HEAD                                      |
+| `npx changemap @`                         | Same as the default                                             |
+| `npx changemap feature`                   | The branch tip's first parent → its tip; a commit ID also works |
+| `npx changemap feature main`              | `main` → `feature`                                              |
+| `npx changemap feature main --merge-base` | Merge base of `feature` and `main` → `feature`                  |
 
-**With two revisions, the second argument is before and the first is after.**
-They are compared directly, not from their merge base.
+**With two revisions, the second argument is before and the first is after by default.**
+They are compared directly, so changes made only on the second branch also appear.
+
+For a GitHub pull request or GitLab merge request review, add `--merge-base`:
+
+```sh
+npx changemap <source_branch> <target_branch> --merge-base
+# Example using remote-tracking branches after fetching them:
+npx changemap origin/feature origin/main --merge-base
+```
+
+This compares the branches' merge base (their best common ancestor) to the source
+branch tip, excluding changes made only on the target branch after divergence.
+It uses local Git history; fetch the refs and history needed for the review separately.
+To match a particular MR/PR diff, use its source commit and diff base; the web page
+may show a saved diff version rather than the current local branch tips.
+The flag requires two revisions. Missing or multiple merge bases produce an error.
+The map still includes unchanged files directly connected to changed files.
 
 ```sh
 npx changemap . --no-open    # print the URL without opening a browser

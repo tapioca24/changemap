@@ -18,12 +18,14 @@ export function parseOptions(args: readonly string[]): CliOptions {
   if (args.length === 1 && ["--version", "-v"].includes(args[0])) return { command: "version" };
   const positional: string[] = [];
   let open = true;
+  let mergeBase = false;
   let port = 18473;
   let editor: string | undefined;
   const go: { os?: string; arch?: string; tags?: string[] } = {};
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--no-open") open = false;
+    else if (arg === "--merge-base") mergeBase = true;
     else if (arg === "--editor" || arg.startsWith("--editor=")) {
       const value = arg === "--editor" ? args[++i] : arg.slice(9);
       if (!value || value.startsWith("-")) throw new Error("--editor requires a command.");
@@ -50,5 +52,5 @@ export function parseOptions(args: readonly string[]): CliOptions {
       throw new Error(`Unknown or misplaced option: ${arg}. Use --help.`);
     else positional.push(arg);
   }
-  return { command: "review", input: parseInput(positional), open, port, editor, go };
+  return { command: "review", input: parseInput(positional, mergeBase), open, port, editor, go };
 }

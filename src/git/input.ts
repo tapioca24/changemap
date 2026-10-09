@@ -5,10 +5,14 @@ export interface ReviewInput {
   readonly mode: ReviewMode;
   readonly target: string;
   readonly compareWith?: string;
+  readonly mergeBase?: boolean;
 }
 
-export function parseInput(args: readonly string[]): ReviewInput {
+export function parseInput(args: readonly string[], mergeBase = false): ReviewInput {
   if (args.length > 2) throw new Error("Expected at most <target> [compare-with].");
+  if (mergeBase && args.length !== 2) {
+    throw new Error("--merge-base requires two Git revisions: <source> <target>.");
+  }
   const target = args[0] === "@" || !args[0] ? "HEAD" : args[0];
   const special = (value: string) => [".", "staged", "working"].includes(value);
   if (args.some((arg) => !arg || arg.startsWith("-") || arg.includes("\0"))) {
@@ -20,7 +24,12 @@ export function parseInput(args: readonly string[]): ReviewInput {
         "Use ., staged, or working alone; two-argument input requires two revisions.",
       );
     }
-    return { mode: "compare", target, compareWith: args[1] === "@" ? "HEAD" : args[1] };
+    return {
+      mode: "compare",
+      target,
+      compareWith: args[1] === "@" ? "HEAD" : args[1],
+      ...(mergeBase ? { mergeBase: true } : {}),
+    };
   }
   return { mode: special(target) ? (target as ReviewMode) : "commit", target };
 }
@@ -61,4 +70,28 @@ export async function resolveHead(repository: string): Promise<string | undefine
     }
     throw error;
   }
+}
+
+export async function resolveMergeBase(
+  repository: string,
+  first: string,
+  second: string,
+): Promise<string> {
+  let bases: string;
+  try {
+    bases = await gitText(repository, ["merge-base", "--all", first, second]);
+  } catch (error) {
+    if (error instanceof GitError && error.code === 1) {
+      throw new Error(
+        `No merge base exists between ${first} and ${second}. The histories may be unrelated or shallow; fetch missing history separately.`,
+      );
+    }
+    throw error;
+  }
+  if (bases.includes("\n")) {
+    throw new Error(
+      "Multiple merge bases exist. Select a base explicitly with two revisions without --merge-base.",
+    );
+  }
+  return bases;
 }

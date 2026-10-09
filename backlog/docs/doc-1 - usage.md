@@ -3,7 +3,7 @@ id: doc-1
 title: usage
 type: guide
 created_date: '2026-09-23 15:07'
-updated_date: '2026-10-09 15:02'
+updated_date: '2026-10-09 16:10'
 ---
 # Usage guide
 
@@ -17,12 +17,22 @@ Run changemap inside the Git working tree you want to inspect.
 | none or `@` | HEAD's first parent | HEAD |
 | `<revision>` | Revision's first parent | Revision |
 | `<target> <compare-with>` | compare-with | target |
+| `<source> <target> --merge-base` | Merge base of source and target | source |
 | `.` | HEAD | Working tree |
 | `staged` | HEAD | Index |
 | `working` | Index | Working tree |
 
 A revision can be a commit ID, branch, tag, or Git revision expression.
-Two-revision comparisons use the tips directly, not their merge base.
+By default, two-revision comparisons use the tips directly, not their merge base.
+Add `--merge-base` to compare their best common ancestor to the first revision.
+For MR/PR reviews, use `<source> <target> --merge-base`; target-only changes after
+divergence are excluded. Unchanged direct dependencies and users still appear.
+The flag requires exactly two revisions. A missing merge base (including incomplete
+shallow history) or multiple best common ancestors produces an error. If there are
+multiple bases, select one explicitly with two revisions without the flag.
+Refs and history are local; fetch them separately as needed. A saved web diff may
+use different commits from the current branch tips; use the source commit and diff
+base of that version to reproduce its comparison.
 Use `.`, `staged`, and `working` alone; they cannot be combined with a second input.
 
 ### Options and server lifecycle
@@ -43,8 +53,8 @@ does not stop it. Invalid comparisons and unknown options produce errors.
 Single merge commits use the first parent. Root commits compare against an empty
 state. Before the first commit, `.` and `staged` use an empty before state, while
 `working` still compares the index to the working tree. Default and `@` require a
-commit. Two-revision comparisons use the specified tips directly, so changes only
-on the comparison branch appear reversed.
+commit. Without `--merge-base`, two-revision comparisons use the specified tips
+directly, so changes only on the comparison branch appear reversed.
 
 `.` and `working` include non-ignored untracked files. `staged` excludes them and
 intent-to-add placeholders. Staging A -> B and then editing B -> C produces A -> B
@@ -90,7 +100,9 @@ keeps the old comparison and offers a retry.
 and `working` observes the index and eligible working files. Staging alone does not
 invalidate `.` if contents and the reviewed file set stay the same. HEAD-only
 changes do not invalidate `working`. Branch and HEAD inputs are re-resolved on
-refresh; explicit commit IDs remain fixed.
+refresh; explicit commit IDs remain fixed. With `--merge-base`, both revision tips
+are observed, even when the merge base stays the same. Refresh recomputes the
+merge base and captures its files and analysis settings as the before state.
 
 ## Git and performance limits
 

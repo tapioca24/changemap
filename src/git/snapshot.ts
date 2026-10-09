@@ -9,7 +9,7 @@ import type {
 } from "../shared/review.js";
 import { gitText } from "./command.js";
 import { diffStates } from "./diff.js";
-import { resolveCommit, resolveHead, type ReviewInput } from "./input.js";
+import { resolveCommit, resolveHead, resolveMergeBase, type ReviewInput } from "./input.js";
 import {
   commitState,
   emptyState,
@@ -76,11 +76,22 @@ export class SnapshotSource {
     const { repository, input } = this;
     let before: CapturedState;
     let after: CapturedState;
+    let comparisonRef = "";
     if (input.mode === "commit" || input.mode === "compare") {
       const target = await this.resolve(input.target);
       after = await this.commit(target, input.target);
       if (input.mode === "compare") {
-        before = await this.commit(await this.resolve(input.compareWith!), input.compareWith!);
+        const compareWith = await this.resolve(input.compareWith!);
+        if (input.mergeBase) {
+          before = await this.commit(
+            await resolveMergeBase(repository, target, compareWith),
+            `merge-base(${input.target}, ${input.compareWith})`,
+          );
+          // Observe both branch tips even when the merge base stays the same.
+          comparisonRef = `:${compareWith}`;
+        } else {
+          before = await this.commit(compareWith, input.compareWith!);
+        }
       } else {
         // rev-list hides parents at shallow boundaries; read the actual commit header.
         const header = (await gitText(repository, ["cat-file", "commit", target])).split(
@@ -106,7 +117,11 @@ export class SnapshotSource {
           ? await indexState(repository)
           : await worktreeState(repository, entries);
     }
-    return { before, after, fingerprint: `${stateFingerprint(before)}:${stateFingerprint(after)}` };
+    return {
+      before,
+      after,
+      fingerprint: `${stateFingerprint(before)}:${stateFingerprint(after)}${comparisonRef}`,
+    };
   }
 
   async fingerprint(): Promise<string> {

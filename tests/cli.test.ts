@@ -21,6 +21,8 @@ test("help describes implemented comparisons, server lifecycle, and options", ()
   expect(result.stdout).toContain("changemap --version");
   expect(result.stdout).toContain("--no-open");
   expect(result.stdout).toContain("--editor");
+  expect(result.stdout).toContain("--merge-base");
+  expect(result.stdout).toContain("changemap <source> <target> --merge-base");
   expect(result.stdout).toContain("Ctrl+C");
   expect(result.stdout).toContain("staged");
 });
@@ -47,6 +49,12 @@ test.each([
   ["--go-os", "../../linux"],
   ["--pr", "1"],
   ["--unknown"],
+  ["--merge-base"],
+  ["feature", "--merge-base"],
+  [".", "--merge-base"],
+  ["staged", "HEAD", "--merge-base"],
+  ["HEAD", "working", "--merge-base"],
+  ["feature", "main", "--merge-base=true"],
   ["--help", "HEAD"],
   ["--version", "--help"],
 ])("rejects unsupported invocation %j", (...args) => {
@@ -78,6 +86,50 @@ test("Go options accept separate and inline values and normalize build tags", ()
     go: { os: "linux", arch: "arm64", tags: ["feature", "other"] },
   });
   expect(parseOptions([])).toMatchObject({ go: {} });
+});
+
+test("merge-base accepts two revisions with the flag in any position and normalizes @", () => {
+  for (const args of [
+    ["feature", "@", "--merge-base"],
+    ["--merge-base", "feature", "@"],
+    ["feature", "--merge-base", "@"],
+  ]) {
+    expect(parseOptions(args)).toMatchObject({
+      input: { mode: "compare", target: "feature", compareWith: "HEAD", mergeBase: true },
+    });
+  }
+  expect(parseOptions(["@", "main", "--merge-base"])).toMatchObject({
+    input: { target: "HEAD", compareWith: "main", mergeBase: true },
+  });
+  expect(() => parseOptions(["feature", "--merge-base"])).toThrow(
+    "--merge-base requires two Git revisions",
+  );
+  expect(parseOptions(["feature", "main"])).toMatchObject({
+    input: { mode: "compare", target: "feature", compareWith: "main" },
+  });
+});
+
+test("built CLI compares a merge base to the source tip", async () => {
+  const repo = await repository();
+  await repo.write("base.txt", "base\n");
+  const base = await repo.commit();
+  await repo.git(["checkout", "-qb", "feature"]);
+  await repo.write("feature.txt", "feature\n");
+  const feature = await repo.commit();
+  await repo.git(["checkout", "-q", "main"]);
+  await repo.write("main.txt", "main\n");
+  await repo.commit();
+  const running = await launchCli(repo.root, ["feature", "main", "--merge-base", "--no-open"]);
+  try {
+    const snapshot = await fetch(`${running.url}/api/snapshot`).then((response) => response.json());
+    expect(snapshot.before.commit).toBe(base);
+    expect(snapshot.after.commit).toBe(feature);
+    expect(snapshot.changes).toEqual([
+      expect.objectContaining({ newPath: "feature.txt", status: "added" }),
+    ]);
+  } finally {
+    await running.stop();
+  }
 });
 
 test("CLI reports missing repositories and commits", async () => {

@@ -7,6 +7,8 @@ import { ReviewSession } from "../src/review/session.js";
 import { repository } from "./helpers/repository.js";
 
 const source = (root: string, ...args: string[]) => new SnapshotSource(root, parseInput(args));
+const mergeBaseSource = (root: string, first: string, second: string) =>
+  new SnapshotSource(root, parseInput([first, second], true));
 
 test("whitespace display patch ignores spacing without changing captured status or normal patch", async () => {
   const repo = await repository();
@@ -79,6 +81,124 @@ test("a merge uses its first parent, including conflict-resolution edits", async
   const snapshot = await source(repo.root).capture();
   expect(snapshot.before.commit).toBe(firstParent);
   expect(snapshot.summary.changes[0].patch).toContain("-main\n+resolved");
+});
+
+test("merge-base excludes target-only changes and analyzes both captured states with unchanged neighbors", async () => {
+  const repo = await repository();
+  await repo.write("shared.ts", "export const shared = 1;\n");
+  await repo.write("feature.ts", "export const feature = 1;\n");
+  const base = await repo.commit();
+  await repo.git(["checkout", "-qb", "feature"]);
+  await repo.write(
+    "feature.ts",
+    "import { shared } from './shared.js';\nexport const feature = shared;\n",
+  );
+  const feature = await repo.commit();
+  await repo.git(["checkout", "-q", "main"]);
+  await repo.write("shared.ts", "export const shared = 2;\n");
+  await repo.write("main.ts", "export const main = 1;\n");
+  await repo.commit();
+  const snapshot = await mergeBaseSource(repo.root, "feature", "main").capture();
+  expect(snapshot.before.commit).toBe(base);
+  expect(snapshot.before.label).toBe("merge-base(feature, main)");
+  expect(snapshot.after.commit).toBe(feature);
+  expect(snapshot.before.files["shared.ts"].content).toBe("export const shared = 1;\n");
+  expect(snapshot.before.files["main.ts"]).toBeUndefined();
+  expect(snapshot.summary.changes).toEqual([
+    expect.objectContaining({ oldPath: "feature.ts", newPath: "feature.ts", status: "modified" }),
+  ]);
+  expect(snapshot.summary.changes.map((change) => change.newPath)).toEqual(
+    (await repo.git(["diff", "--name-only", "main...feature", "--"])).split("\n"),
+  );
+  expect(snapshot.summary.graph.selection.paths).toEqual(["feature.ts", "shared.ts"]);
+  expect(
+    snapshot.summary.graph.merged.nodes.find((node) => node.newPath === "shared.ts")?.status,
+  ).toBe("unchanged");
+  expect(snapshot.summary.graph.before.edges).toEqual([]);
+  expect(snapshot.summary.graph.after.edges).toEqual([
+    expect.objectContaining({ source: "feature.ts", target: "shared.ts" }),
+  ]);
+});
+
+test("merge-base supports commit IDs, ancestor tips and identical revisions", async () => {
+  const repo = await repository();
+  await repo.write("file.txt", "base\n");
+  const base = await repo.commit();
+  await repo.write("file.txt", "updated\n");
+  const tip = await repo.commit();
+  const forward = await mergeBaseSource(repo.root, tip.slice(0, 8), base).capture();
+  expect(forward.before.commit).toBe(base);
+  expect(forward.after.commit).toBe(tip);
+  expect(forward.summary.changes).toHaveLength(1);
+  for (const second of [tip, base]) {
+    const empty = await mergeBaseSource(repo.root, base, second).capture();
+    expect(empty.before.commit).toBe(base);
+    expect(empty.after.commit).toBe(base);
+    expect(empty.summary.changes).toEqual([]);
+  }
+});
+
+test("merge-base observes both tips, recomputes on refresh, and retains snapshots for unrelated histories", async () => {
+  const repo = await repository();
+  await repo.write("base.txt", "base\n");
+  const base = await repo.commit();
+  await repo.git(["checkout", "-qb", "feature"]);
+  await repo.write("feature.txt", "first\n");
+  const feature = await repo.commit();
+  await repo.git(["checkout", "-q", "main"]);
+  const session = await ReviewSession.create(mergeBaseSource(repo.root, "feature", "main"));
+  const fixed = await ReviewSession.create(mergeBaseSource(repo.root, feature, base));
+  const original = session.snapshot;
+  await repo.write("main.txt", "target-only\n");
+  await repo.commit();
+  await session.check();
+  expect(session.status.stale).toBe(true);
+  expect(session.snapshot).toBe(original);
+  await session.refresh();
+  expect(session.snapshot.before.commit).toBe(base);
+  expect(session.snapshot.summary.changes).toEqual(original.summary.changes);
+  await repo.git(["checkout", "-q", "feature"]);
+  await repo.write("feature.txt", "second\n");
+  const nextFeature = await repo.commit();
+  await session.check();
+  expect(session.status.stale).toBe(true);
+  await session.refresh();
+  expect(session.snapshot.after.commit).toBe(nextFeature);
+  await repo.git(["update-ref", "refs/heads/main", nextFeature]);
+  await session.check();
+  expect(session.status.stale).toBe(true);
+  await session.refresh();
+  expect(session.snapshot.before.commit).toBe(nextFeature);
+  expect(session.snapshot.summary.changes).toEqual([]);
+  const current = session.snapshot;
+  const unrelated = await repo.git(["commit-tree", `${base}^{tree}`, "-m", "unrelated"]);
+  await repo.git(["update-ref", "refs/heads/main", unrelated]);
+  await session.check();
+  expect(session.status.error).toContain("No merge base exists");
+  await expect(session.refresh()).rejects.toThrow("No merge base exists");
+  expect(session.snapshot).toBe(current);
+  await repo.git(["update-ref", "refs/heads/main", nextFeature]);
+  await session.refresh();
+  expect(session.status.error).toBeNull();
+  await fixed.check();
+  expect(fixed.status.stale).toBe(false);
+  await fixed.refresh();
+  expect(fixed.snapshot.before.commit).toBe(base);
+  expect(fixed.snapshot.after.commit).toBe(feature);
+});
+
+test("merge-base rejects ambiguous criss-cross histories instead of choosing an arbitrary base", async () => {
+  const repo = await repository();
+  await repo.write("base.txt", "base\n");
+  const base = await repo.commit();
+  const tree = `${base}^{tree}`;
+  const left = await repo.git(["commit-tree", tree, "-p", base, "-m", "left"]);
+  const right = await repo.git(["commit-tree", tree, "-p", base, "-m", "right"]);
+  const first = await repo.git(["commit-tree", tree, "-p", left, "-p", right, "-m", "first"]);
+  const second = await repo.git(["commit-tree", tree, "-p", right, "-p", left, "-m", "second"]);
+  await expect(mergeBaseSource(repo.root, first, second).capture()).rejects.toThrow(
+    "Multiple merge bases exist",
+  );
 });
 
 test(". combines staged and unstaged changes; staged freezes the index; working compares index to worktree", async () => {
@@ -278,22 +398,27 @@ test("capture retries interrupted reads and leaves a current snapshot intact on 
   expect(session.status.error).toContain("changed during capture");
 });
 
-test("missing comparison refs preserve the snapshot and can be retried after restoring the ref", async () => {
-  const repo = await repository();
-  await repo.write("file.ts", "A\n");
-  const oid = await repo.commit();
-  await repo.git(["branch", "other"]);
-  const session = await ReviewSession.create(source(repo.root, "main", "other"));
-  const snapshot = session.snapshot;
-  await repo.git(["branch", "-D", "other"]);
-  await session.check();
-  expect(session.status.stale).toBe(true);
-  await expect(session.refresh()).rejects.toThrow("other");
-  expect(session.snapshot).toBe(snapshot);
-  await repo.git(["branch", "other", oid]);
-  await session.refresh();
-  expect(session.status.error).toBeNull();
-});
+test.each([false, true])(
+  "missing comparison refs preserve the snapshot and can be retried (merge-base: %s)",
+  async (mergeBase) => {
+    const repo = await repository();
+    await repo.write("file.ts", "A\n");
+    const oid = await repo.commit();
+    await repo.git(["branch", "other"]);
+    const session = await ReviewSession.create(
+      new SnapshotSource(repo.root, parseInput(["main", "other"], mergeBase)),
+    );
+    const snapshot = session.snapshot;
+    await repo.git(["branch", "-D", "other"]);
+    await session.check();
+    expect(session.status.stale).toBe(true);
+    await expect(session.refresh()).rejects.toThrow("other");
+    expect(session.snapshot).toBe(snapshot);
+    await repo.git(["branch", "other", oid]);
+    await session.refresh();
+    expect(session.status.error).toBeNull();
+  },
+);
 
 test.skipIf(process.platform === "win32")(
   "symlinks are captured as links, directory links are not followed, and modes are retained",
