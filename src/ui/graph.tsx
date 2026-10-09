@@ -14,7 +14,13 @@ import {
   type NodeProps,
   type Node,
 } from "@xyflow/react";
-import { layoutElements, type DirectoryNodeData, type FileNodeData } from "./layout.js";
+import {
+  layoutMap,
+  type DirectoryNodeData,
+  type FileNodeData,
+  type PackageNodeData,
+} from "./layout.js";
+import { createMapModel, type MapModel } from "./map-model.js";
 import { edgeAppearance, edgeFans, edgePath } from "./edge-path.js";
 import { revealNode } from "./viewport.js";
 import type { MergedFileNode, ReviewGraph } from "../graph/model.js";
@@ -41,13 +47,13 @@ const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileNodeData>>)
   const target = { LR: Position.Left, RL: Position.Right, TB: Position.Top, BT: Position.Bottom }[
     data.direction
   ];
-  const path = data.file.newPath ?? data.file.oldPath!;
+  const path = data.path;
   return (
     <div
       className={`file-node ${data.file.status}`}
       role="button"
       tabIndex={0}
-      aria-label={`Open ${data.file.newPath ?? data.file.oldPath}`}
+      aria-label={`Open ${path}`}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
@@ -75,7 +81,42 @@ const DirectoryNode = memo(function DirectoryNode({ data }: NodeProps<Node<Direc
     </div>
   );
 });
-const nodeTypes = { file: FileNode, directory: DirectoryNode };
+const PackageNode = memo(function PackageNode({ data }: NodeProps<Node<PackageNodeData>>) {
+  const source = { LR: Position.Right, RL: Position.Left, TB: Position.Bottom, BT: Position.Top }[
+    data.direction
+  ];
+  const target = { LR: Position.Left, RL: Position.Right, TB: Position.Top, BT: Position.Bottom }[
+    data.direction
+  ];
+  const pkg = data.package;
+  return (
+    <div
+      className={`file-node package-node ${pkg.status}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open Go package ${pkg.path}`}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          data.onSelect?.();
+        }
+      }}
+    >
+      <Handle type="target" position={target} />
+      <span className="package-kind">GO PACKAGE</span>
+      <strong title={pkg.path}>{pkg.path === "." ? "(root)" : pkg.path.split("/").pop()}</strong>
+      <span className="file-directory" title={pkg.path}>
+        {pkg.path}
+      </span>
+      <span className="package-count">
+        {pkg.changedCount} changed · {pkg.files.length} shown
+      </span>
+      {pkg.unresolved && <span className="unresolved">! Unresolved references</span>}
+      <Handle type="source" position={source} />
+    </div>
+  );
+});
+const nodeTypes = { file: FileNode, package: PackageNode, directory: DirectoryNode };
 function DependencyEdge({
   id,
   data,
@@ -260,6 +301,7 @@ function RevealSelection({
 
 export const Graph = memo(function Graph({
   graph,
+  model,
   direction,
   groupByDirectory,
   selected,
@@ -268,6 +310,7 @@ export const Graph = memo(function Graph({
   suspended = false,
 }: {
   graph: ReviewGraph;
+  model?: MapModel;
   direction: Settings["orientation"];
   groupByDirectory: boolean;
   selected: string | null;
@@ -275,8 +318,9 @@ export const Graph = memo(function Graph({
   resizing?: boolean;
   suspended?: boolean;
 }) {
+  const map = useMemo(() => model ?? createMapModel(graph, "files"), [model, graph]);
   const [hovered, setHovered] = useState<{
-    graph: ReviewGraph;
+    map: MapModel;
     direction: Settings["orientation"];
     groupByDirectory: boolean;
     kind: "edge" | "node";
@@ -284,15 +328,15 @@ export const Graph = memo(function Graph({
   } | null>(null);
   const { nodes, routes, fileBounds, failed } = useMemo(() => {
     try {
-      return { ...layoutElements(graph, direction, groupByDirectory), failed: false };
+      return { ...layoutMap(map, direction, groupByDirectory), failed: false };
     } catch {
       return { nodes: [], routes: [], fileBounds: new Map(), failed: true };
     }
-  }, [graph, direction, groupByDirectory]);
+  }, [map, direction, groupByDirectory]);
   const selectableNodes = useMemo(
     () =>
       nodes.map((node) =>
-        node.type === "file"
+        node.type === "file" || node.type === "package"
           ? {
               ...node,
               data: { ...node.data, onSelect: () => onSelect(node.id) },
@@ -309,23 +353,23 @@ export const Graph = memo(function Graph({
   );
   const onNodeClick = useCallback(
     (_: unknown, node: { id: string; type?: string }) => {
-      if (node.type === "file") onSelect(node.id);
+      if (node.type === "file" || node.type === "package") onSelect(node.id);
     },
     [onSelect],
   );
   const focus =
-    hovered?.graph === graph &&
+    hovered?.map === map &&
     hovered.direction === direction &&
     hovered.groupByDirectory === groupByDirectory
       ? hovered
       : null;
   const sourceFans = useMemo(
-    () => edgeFans(graph.merged.edges, fileBounds, direction),
-    [graph, direction, fileBounds],
+    () => edgeFans(map.edges, fileBounds, direction),
+    [map, direction, fileBounds],
   );
   const edges = useMemo(
     () =>
-      graph.merged.edges.map((edge, i) => {
+      map.edges.map((edge, i) => {
         const active =
           focus?.kind === "edge"
             ? focus.id === `edge-${i}`
@@ -369,7 +413,7 @@ export const Graph = memo(function Graph({
           },
         };
       }),
-    [graph, routes, direction, sourceFans, focus, selected],
+    [map, routes, direction, sourceFans, focus, selected],
   );
   if (failed) {
     return (
@@ -398,9 +442,9 @@ export const Graph = memo(function Graph({
     );
   }
   return (
-    <div className="graph-canvas" role="group" aria-label="File dependency graph">
+    <div className="graph-canvas" role="group" aria-label="Dependency graph">
       <ReactFlow
-        key={`${direction}:${groupByDirectory}`}
+        key={`${direction}:${groupByDirectory}:${map.nodes.some((node) => node.kind === "package")}`}
         nodes={displayedNodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -409,8 +453,8 @@ export const Graph = memo(function Graph({
         nodesConnectable={false}
         onNodeClick={onNodeClick}
         onNodeMouseEnter={(_, node) => {
-          if (node.type === "file")
-            setHovered({ graph, direction, groupByDirectory, kind: "node", id: node.id });
+          if (node.type === "file" || node.type === "package")
+            setHovered({ map, direction, groupByDirectory, kind: "node", id: node.id });
         }}
         onNodeMouseLeave={(_, node) => {
           setHovered((current) =>
@@ -418,7 +462,7 @@ export const Graph = memo(function Graph({
           );
         }}
         onEdgeMouseEnter={(_, edge) =>
-          setHovered({ graph, direction, groupByDirectory, kind: "edge", id: edge.id })
+          setHovered({ map, direction, groupByDirectory, kind: "edge", id: edge.id })
         }
         onEdgeMouseLeave={(_, edge) => {
           setHovered((current) =>

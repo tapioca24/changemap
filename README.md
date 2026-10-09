@@ -72,6 +72,9 @@ ports in order (up to 100 ports total) and prints the URL it actually uses.
 - Changed TypeScript and Go files appear with their direct dependencies and direct users
   from both sides of the comparison. Arrows point from the referencing file to
   its target. The map does not recursively expand the whole project.
+- Go starts in **Packages** view. Select a package to list its changed and related
+  files on the right, then select a file to read its diff or code. Use **Go map →
+  Files** to inspect individual file relationships. TypeScript stays file-based.
 - Other changed files remain accessible under **Outside dependency analysis**.
   PNG, JPEG, GIF, and WebP files show before/after image previews where available;
   other binary files have no preview. The usage guide below lists preview limits.
@@ -114,7 +117,19 @@ File suffixes, `//go:build`, and legacy `// +build` constraints select source fi
 excluded files remain accessible outside dependency analysis. Architecture
 feature tags use the baseline for the selected architecture, and cgo is disabled.
 
-Edges connect references to the files declaring the referenced functions, types,
+Go package nodes show the number of changed files and files included in the map.
+Packages are identified by their repository-relative directory; internal and
+external tests in that directory share the node. Only references directly involving
+changed files select package connections; unrelated imports in other files do not
+expand the map. Connections within a package are hidden in Packages view, including
+when only one package is shown. A moved file is listed in both its old and new packages.
+
+Package arrows are marked added or deleted only when that connection appears or
+disappears across the captured states. Switching declarations inside a package,
+or adding/removing a reference when another file retains the same connection,
+leaves the package arrow unchanged. The Go view choice is remembered in the browser.
+
+In Files view, edges connect references to the files declaring the referenced functions, types,
 variables, fields, or methods, including references within a package. Both
 internal and external `*_test.go` packages are included. Interface calls connect
 to the interface declaration; implementations are not enumerated. Imports alone

@@ -7,18 +7,20 @@ import type { ReviewSummary, ReviewStatus } from "../src/shared/review.js";
 import type { Settings } from "../src/shared/settings.js";
 import { themes } from "../src/shared/settings.js";
 import type { ReviewGraph } from "../src/graph/model.js";
+import type { MapModel } from "../src/ui/map-model.js";
 
 // Canvas geometry is tested separately and measured in Chromium. Keep the real
 // App, CodePane, API client, and all asynchronous state transitions in this suite.
 vi.mock("../src/ui/graph.js", async (original) => ({
   ...(await original<typeof import("../src/ui/graph.js")>()),
   Graph: ({
-    graph,
+    model,
     direction,
     groupByDirectory,
     onSelect,
   }: {
     graph: ReviewGraph;
+    model: MapModel;
     direction: string;
     groupByDirectory: boolean;
     onSelect(id: string): void;
@@ -26,15 +28,13 @@ vi.mock("../src/ui/graph.js", async (original) => ({
     createElement(
       "div",
       { "aria-label": "Test graph", "data-direction": direction, "data-grouped": groupByDirectory },
-      ...graph.merged.nodes
-        .filter((n) => n.analyzed.after || n.analyzed.before)
-        .map((n) =>
-          createElement(
-            "button",
-            { key: n.id, onClick: () => onSelect(n.id) },
-            `Open ${n.newPath ?? n.oldPath}`,
-          ),
+      ...model.nodes.map((n) =>
+        createElement(
+          "button",
+          { key: n.id, onClick: () => onSelect(n.id) },
+          n.kind === "package" ? `Open Go package ${n.path}` : `Open ${n.path}`,
         ),
+      ),
     ),
 }));
 vi.mock("../src/ui/highlight-client.js", () => ({ highlightFile: vi.fn(async () => []) }));
@@ -438,11 +438,99 @@ test("shows the selected Go configuration and retains partial-analysis diagnosti
     },
   });
   render(createElement(App));
-  await screen.findByText("Open main.go");
+  await screen.findByText("Open Go package .");
   fireEvent.click(screen.getByRole("button", { name: "Snapshot details" }));
   expect(await screen.findByText(/linux\/amd64/)).toBeTruthy();
   expect(screen.getByText(/tags: integration/)).toBeTruthy();
   expect(screen.getByText(/External package is unavailable/)).toBeTruthy();
-  fireEvent.click(screen.getByText("Open main.go"));
+  fireEvent.click(screen.getByRole("button", { name: "Snapshot details" }));
+  fireEvent.click(screen.getByText("Open Go package ."));
+  fireEvent.click(screen.getByRole("button", { name: "Open main.go" }));
   expect(screen.getByLabelText("File diff")).toBeTruthy();
+});
+
+function goSnapshot() {
+  const initial = snapshot("go-review", "service/user.go");
+  const changed = initial.graph.merged.nodes[0];
+  const related = {
+    ...changed,
+    id: "related-id",
+    oldPath: "service/helper.go",
+    newPath: "service/helper.go",
+    status: "unchanged" as const,
+    change: null,
+  };
+  const state = {
+    ...initial.graph.before,
+    nodes: ["service/user.go", "service/helper.go"].map((path) => ({ path })),
+    edges: [{ source: "service/user.go", target: "service/helper.go" }],
+  };
+  return {
+    ...initial,
+    graph: {
+      ...initial.graph,
+      before: state,
+      after: state,
+      merged: {
+        nodes: [changed, related],
+        edges: [{ source: changed.id, target: related.id, status: "unchanged" as const }],
+      },
+    },
+  };
+}
+
+test("Go packages open a changed/related file list, code and a return path while file mode preserves selection", async () => {
+  api(goSnapshot());
+  const view = render(createElement(App));
+  const openPackage = await screen.findByRole("button", { name: "Open Go package service" });
+  expect((screen.getByLabelText("Go map granularity") as HTMLSelectElement).value).toBe("packages");
+  expect(screen.queryByLabelText("Code pane")).toBeNull();
+  fireEvent.click(openPackage);
+  expect(screen.getByLabelText("Changed files").textContent).toContain("user.go");
+  expect(screen.getByLabelText("Related files").textContent).toContain("helper.go");
+  fireEvent.click(screen.getByRole("button", { name: "Open service/user.go" }));
+  expect(addedCode()).toContain("go-review");
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close code pane" }));
+  fireEvent.click(screen.getByRole("button", { name: "Back to package files" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open service/helper.go" }));
+  expect(await screen.findByLabelText("Full file")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Go map granularity"), { target: { value: "files" } });
+  expect(screen.getByLabelText("Code pane")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Back to package files" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Open service/user.go" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Close code pane" }));
+  view.unmount();
+  render(createElement(App));
+  await screen.findByRole("button", { name: "Open service/user.go" });
+  expect((screen.getByLabelText("Go map granularity") as HTMLSelectElement).value).toBe("files");
+});
+
+test("narrow package/file navigation returns to the map and can reopen the package", async () => {
+  measuredWidth = 390;
+  api(goSnapshot());
+  render(createElement(App));
+  fireEvent.click(await screen.findByRole("button", { name: "Open Go package service" }));
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Back to graph" }));
+  expect(screen.getByLabelText("Change map").hasAttribute("inert")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Open service/user.go" }));
+  fireEvent.click(screen.getByRole("button", { name: "Back to package files" }));
+  fireEvent.click(screen.getByRole("button", { name: "Back to graph" }));
+  expect(screen.getByLabelText("Change map").hasAttribute("inert")).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Open selected package" }));
+  expect(screen.getByLabelText("Go package service files")).toBeTruthy();
+});
+
+test("a selected package updates its list on refresh and closes when its files disappear", async () => {
+  const state = api(goSnapshot());
+  render(createElement(App));
+  fireEvent.click(await screen.findByRole("button", { name: "Open Go package service" }));
+  state.next = { ...goSnapshot(), id: "updated" };
+  fireEvent.click(screen.getByRole("button", { name: "Refresh comparison" }));
+  await waitFor(() => expect(state.snapshot.id).toBe("updated"));
+  expect(screen.getByLabelText("Go package service files")).toBeTruthy();
+  state.next = snapshot("typescript-only", "a.ts");
+  fireEvent.click(screen.getByRole("button", { name: "Refresh comparison" }));
+  await screen.findByText("Open a.ts");
+  expect(screen.queryByLabelText("Go package service files")).toBeNull();
+  expect(screen.queryByLabelText("Go map granularity")).toBeNull();
 });
