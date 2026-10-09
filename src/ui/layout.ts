@@ -2,9 +2,11 @@ import dagre from "@dagrejs/dagre";
 import type { Node } from "@xyflow/react";
 import type { MergedFileNode, ReviewGraph } from "../graph/model.js";
 import type { Settings } from "../shared/settings.js";
+import { createMapModel, type MapModel, type MapPackage } from "./map-model.js";
 
 export type FileNodeData = {
   file: MergedFileNode;
+  path: string;
   unresolved: boolean;
   direction: Settings["orientation"];
   directoryPath: string | null;
@@ -12,7 +14,15 @@ export type FileNodeData = {
 };
 
 export type DirectoryNodeData = { path: string; name: string };
-export type LayoutNode = Node<FileNodeData, "file"> | Node<DirectoryNodeData, "directory">;
+export type PackageNodeData = {
+  package: MapPackage;
+  direction: Settings["orientation"];
+  onSelect?: () => void;
+};
+export type LayoutNode =
+  | Node<FileNodeData, "file">
+  | Node<PackageNodeData, "package">
+  | Node<DirectoryNodeData, "directory">;
 
 const fileWidth = 230;
 const fileHeight = 108;
@@ -76,15 +86,15 @@ function routeBetween(
   ];
 }
 
-export function layoutElements(
-  graph: ReviewGraph,
+export function layoutMap(
+  map: MapModel,
   direction: Settings["orientation"],
   groupByDirectory = true,
 ) {
-  const files = graph.merged.nodes.filter((node) => node.analyzed.before || node.analyzed.after);
+  const files = [...map.nodes];
   const directories = new Set<string>();
   for (const file of groupByDirectory ? files : []) {
-    let path = parentPath(file.newPath ?? file.oldPath!);
+    let path = parentPath(file.path);
     while (path !== null) {
       directories.add(path);
       path = parentPath(path);
@@ -107,7 +117,7 @@ export function layoutElements(
   const fileDirectories = new Map<string, string | null>();
   const boxes = new Map<string, Box>();
   for (const file of files) {
-    const parent = groupByDirectory ? parentPath(file.newPath ?? file.oldPath!) : null;
+    const parent = groupByDirectory ? parentPath(file.path) : null;
     fileDirectories.set(file.id, parent);
     boxes.set(file.id, { width: fileWidth, height: fileHeight });
     addChild(parent, file.id);
@@ -137,7 +147,7 @@ export function layoutElements(
     });
     for (const id of children.get(container) ?? []) layout.setNode(id, boxes.get(id)!);
     const directEdges: number[] = [];
-    graph.merged.edges.forEach((edge, index) => {
+    map.edges.forEach((edge, index) => {
       const source = directChild(container, edge.source);
       const target = directChild(container, edge.target);
       if (source === null || target === null || source === target) return;
@@ -151,7 +161,7 @@ export function layoutElements(
       relative.set(id, { x: node.x - node.width / 2, y: node.y - node.height / 2 });
     }
     for (const index of directEdges) {
-      const edge = graph.merged.edges[index];
+      const edge = map.edges[index];
       localRoutes.set(index, {
         container,
         points: layout.edge(edge.source, edge.target).points,
@@ -168,9 +178,7 @@ export function layoutElements(
     // Reuse Dagre's rank slots, changing only their cross-axis order so nodes never overlap.
     const rankAxis = direction === "LR" || direction === "RL" ? "x" : "y";
     const crossAxis = rankAxis === "x" ? "y" : "x";
-    const directoryByFile = new Map(
-      files.map((file) => [file.id, parentPath(file.newPath ?? file.oldPath!) ?? ""]),
-    );
+    const directoryByFile = new Map(files.map((file) => [file.id, parentPath(file.path) ?? ""]));
     const directories = new Map<string, { total: number; count: number }>();
     const ranks = new Map<number, typeof files>();
     for (const file of files) {
@@ -219,7 +227,7 @@ export function layoutElements(
       height: fileHeight,
     });
   }
-  const routes = graph.merged.edges.map((edge, index) => {
+  const routes = map.edges.map((edge, index) => {
     if (!groupByDirectory)
       return routeBetween(fileBounds.get(edge.source)!, fileBounds.get(edge.target)!, direction);
     const local = localRoutes.get(index);
@@ -250,38 +258,46 @@ export function layoutElements(
     };
   });
 
-  const unresolved = {
-    before: new Set(
-      graph.before.references
-        .filter((ref) => ref.outcome === "unresolved")
-        .map((ref) => ref.source),
-    ),
-    after: new Set(
-      graph.after.references.filter((ref) => ref.outcome === "unresolved").map((ref) => ref.source),
-    ),
-  };
   const fileNodes: LayoutNode[] = files.map((file) => {
-    const path = file.newPath ?? file.oldPath!;
+    const path = file.path;
     const parent = groupByDirectory ? parentPath(path) : null;
-    return {
+    const common = {
       id: file.id,
-      type: "file",
       parentId: parent === null ? undefined : directoryId(parent),
       position: relative.get(file.id)!,
-      data: {
-        file,
-        direction,
-        directoryPath: groupByDirectory ? null : parentPath(path),
-        unresolved:
-          (file.oldPath !== null && unresolved.before.has(file.oldPath)) ||
-          (file.newPath !== null && unresolved.after.has(file.newPath)),
-      },
-      ariaLabel: `${path}, ${file.status}`,
       width: fileWidth,
       height: fileHeight,
     };
+    if (file.kind === "package") {
+      return {
+        ...common,
+        type: "package",
+        data: { package: file, direction },
+        ariaLabel: `Go package ${path}, ${file.changedCount} changed files`,
+      };
+    }
+    return {
+      ...common,
+      type: "file",
+      data: {
+        file: file.file,
+        path,
+        direction,
+        directoryPath: groupByDirectory ? null : parentPath(path),
+        unresolved: file.unresolved,
+      },
+      ariaLabel: `${path}, ${file.file.status}`,
+    };
   });
   return { nodes: [...directoryNodes, ...fileNodes], routes, fileBounds };
+}
+
+export function layoutElements(
+  graph: ReviewGraph,
+  direction: Settings["orientation"],
+  groupByDirectory = true,
+) {
+  return layoutMap(createMapModel(graph, "files"), direction, groupByDirectory);
 }
 
 export function layoutGraph(

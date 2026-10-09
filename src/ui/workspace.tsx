@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { ReviewSummary } from "../shared/review.js";
 import type { Settings } from "../shared/settings.js";
 import { Graph } from "./graph.js";
 import { CodePane, defaultDiffDisplay, type DiffDisplaySettings } from "./code-pane.js";
-import { ChevronRight, Files } from "lucide-react";
+import { ArrowLeft, ChevronRight, Files } from "lucide-react";
+import { createMapModel, type GoView } from "./map-model.js";
+import { PackagePane } from "./package-pane.js";
 import { StatusBadge } from "./status-badge.js";
 import { Button } from "@base-ui/react/button";
 
@@ -16,6 +18,7 @@ export interface WorkspacePreferences {
   widthUnit: "px" | "%";
   listOpen: boolean;
   display: DiffDisplaySettings;
+  goView: GoView;
 }
 
 export function loadPreferences(): WorkspacePreferences {
@@ -38,6 +41,7 @@ export function loadPreferences(): WorkspacePreferences {
         : 45,
       widthUnit,
       listOpen: typeof value?.listOpen === "boolean" ? value.listOpen : false,
+      goView: value?.goView === "files" ? "files" : "packages",
       display: {
         layout: value?.display?.layout === "split" ? "split" : "unified",
         ignoreWhitespace:
@@ -47,7 +51,13 @@ export function loadPreferences(): WorkspacePreferences {
       },
     };
   } catch {
-    return { width: 45, widthUnit: "%", listOpen: false, display: defaultDiffDisplay };
+    return {
+      width: 45,
+      widthUnit: "%",
+      listOpen: false,
+      display: defaultDiffDisplay,
+      goView: "packages",
+    };
   }
 }
 
@@ -77,13 +87,32 @@ export function Workspace({
   setPreferences: React.Dispatch<React.SetStateAction<WorkspacePreferences>>;
 }) {
   const [paneOpen, setPaneOpen] = useState(false);
+  const [packageSelection, setPackageSelection] = useState<string | null>(null);
+  const [showPackageFiles, setShowPackageFiles] = useState(false);
+  const map = useMemo(
+    () => createMapModel(snapshot.graph, preferences.goView),
+    [snapshot.graph, preferences.goView],
+  );
+  const pkg = map.nodes.find((node) => node.kind === "package" && node.id === packageSelection);
+  const activePackage = pkg?.kind === "package" ? pkg : null;
+  const mapSelection =
+    activePackage?.id ??
+    map.nodes.find((item) =>
+      item.kind === "file" ? item.id === selected : item.files.some((file) => file.id === selected),
+    )?.id ??
+    null;
+  const hasGo = snapshot.graph.merged.nodes.some(
+    (file) =>
+      (file.analyzed.before && file.oldPath?.endsWith(".go")) ||
+      (file.analyzed.after && file.newPath?.endsWith(".go")),
+  );
   const [resizing, setResizing] = useState(false);
   const [width, setWidth] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const node = snapshot.graph.merged.nodes.find((file) => file.id === selected);
-  const open = paneOpen && !!node;
+  const open = paneOpen && (showPackageFiles ? !!activePackage : !!node);
   const narrow = width > 0 && width < 960;
   const outside = snapshot.graph.merged.nodes.filter(
     (file) => !file.analyzed.before && !file.analyzed.after,
@@ -116,16 +145,25 @@ export function Workspace({
     );
   }, [open, width, preferences.widthUnit, preferredWidth, setPreferences]);
   useEffect(() => {
-    if (open && narrow) closeButton.current?.focus();
-  }, [open, narrow]);
+    if (open && (narrow || activePackage)) closeButton.current?.focus();
+  }, [open, narrow, showPackageFiles, node?.id, activePackage?.id]);
   const select = useCallback(
     (id: string) => {
       returnFocus.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      onSelect(id);
+      const target = map.nodes.find((item) => item.id === id);
+      if (target?.kind === "package") {
+        setPackageSelection(id);
+        setShowPackageFiles(true);
+        onSelect(null);
+      } else {
+        setPackageSelection(null);
+        setShowPackageFiles(false);
+        onSelect(id);
+      }
       setPaneOpen(true);
     },
-    [onSelect],
+    [onSelect, map],
   );
   function close() {
     setPaneOpen(false);
@@ -145,6 +183,28 @@ export function Workspace({
       style={{ "--pane-width": `${paneWidth}px` } as CSSProperties}
     >
       <section className="map-pane" aria-label="Change map" inert={narrow && open}>
+        {hasGo && (
+          <div className="map-toolbar go-map-toolbar">
+            <label>
+              Go map
+              <select
+                aria-label="Go map granularity"
+                value={preferences.goView}
+                onChange={(event) => {
+                  const goView = event.target.value as GoView;
+                  setPreferences((current) => ({ ...current, goView }));
+                  setPackageSelection(null);
+                  setShowPackageFiles(false);
+                  if (showPackageFiles) setPaneOpen(false);
+                }}
+              >
+                <option value="packages">Packages</option>
+                <option value="files">Files</option>
+              </select>
+            </label>
+            <span>Direct dependencies and users of changed files</span>
+          </div>
+        )}
         <div className="map-body">
           {!!outside.length && (
             <section
@@ -192,16 +252,18 @@ export function Workspace({
               <span>{preferences.listOpen ? "Close" : `Other files · ${outside.length}`}</span>
             </Button>
           )}
-          {selected && !open && (
+          {(selected || activePackage) && !open && (
             <Button className="reopen-code" onClick={() => setPaneOpen(true)}>
-              Open selected file <ChevronRight aria-hidden="true" />
+              {showPackageFiles ? "Open selected package" : "Open selected file"}{" "}
+              <ChevronRight aria-hidden="true" />
             </Button>
           )}
           <Graph
             graph={snapshot.graph}
+            model={map}
             direction={direction}
             groupByDirectory={groupByDirectory}
-            selected={selected}
+            selected={mapSelection}
             onSelect={select}
             resizing={resizing}
             suspended={narrow && open}
@@ -251,15 +313,35 @@ export function Workspace({
             }}
           />
           <div id="code-panel" className="code-panel">
-            <CodePane
-              key={node.id}
-              snapshot={snapshot}
-              node={node}
-              display={preferences.display}
-              onClose={close}
-              closeButtonRef={closeButton}
-              narrow={narrow}
-            />
+            {showPackageFiles && activePackage ? (
+              <PackagePane
+                pkg={activePackage}
+                onSelect={(id) => {
+                  onSelect(id);
+                  setShowPackageFiles(false);
+                }}
+                onClose={close}
+                closeButtonRef={closeButton}
+                narrow={narrow}
+              />
+            ) : node ? (
+              <>
+                {activePackage && (
+                  <Button className="package-back" onClick={() => setShowPackageFiles(true)}>
+                    <ArrowLeft aria-hidden="true" /> Back to package files
+                  </Button>
+                )}
+                <CodePane
+                  key={node.id}
+                  snapshot={snapshot}
+                  node={node}
+                  display={preferences.display}
+                  onClose={close}
+                  closeButtonRef={closeButton}
+                  narrow={narrow}
+                />
+              </>
+            ) : null}
           </div>
         </>
       )}

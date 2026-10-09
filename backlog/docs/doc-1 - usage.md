@@ -3,7 +3,13 @@ id: doc-1
 title: usage
 type: guide
 created_date: '2026-09-23 15:07'
+<<<<<<< HEAD
 updated_date: '2026-10-09 14:44'
+||||||| 6aaf163
+updated_date: '2026-10-03 17:53'
+=======
+updated_date: '2026-10-09 14:32'
+>>>>>>> origin/main
 ---
 # Usage guide
 
@@ -56,6 +62,29 @@ The page shows the comparison targets, a dependency map, and a code pane, includ
 an empty state when there are no changes. The server retains full before/after file
 contents, including unchanged files and repository analysis settings. Editing a
 file after capture does not change the stored content.
+
+### Go package and file views
+
+Go maps open in **Packages** view; TypeScript remains file-based. A package node
+represents the repository-relative directory, including its internal and external
+test files, and shows changed-file and displayed-file counts. Select the package
+for a right-hand list of **Changed files** and **Related files**. Selecting a file
+opens its diff or captured code; **Back to package files** returns to the list.
+On narrow screens, **Back to graph** returns to the map.
+
+Only direct references to or from changed files select package connections.
+Dependencies of other files in the same package do not expand the selection.
+Package-internal connections are hidden, even for a comparison with just one
+package. **Go map → Files** restores the individual file map; the browser remembers
+this choice. A file moved across directories appears in both package lists with
+its before/after path, while its captured diff retains one file identity.
+
+Package arrows point from referencing package to target package. Their added or
+deleted label compares the connection across all analyzed Go files in both captured
+states. Changing a declaration target within the same package, or removing one
+reference while another file retains the connection, leaves the arrow unchanged.
+These connections summarize resolved declaration references; they do not represent
+all imports, runtime calls or a guaranteed impact range.
 
 Relevant changes are polled every 1.5 seconds after the previous check completes.
 The page shows an update notice; **Refresh comparison** replaces the captured

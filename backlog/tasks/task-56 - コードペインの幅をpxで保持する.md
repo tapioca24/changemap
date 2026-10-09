@@ -1,11 +1,11 @@
 ---
-id: TASK-55
+id: TASK-56
 title: コードペインの幅をpxで保持する
 status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-09 14:38'
-updated_date: '2026-10-09 14:56'
+updated_date: '2026-10-09 15:01'
 labels: []
 dependencies: []
 modified_files:
@@ -53,6 +53,8 @@ ordinal: 37000
 実ブラウザー: ドラッグで800pxへ変更し、1440→1800pxで800px維持、1100pxで774pxへ一時縮小、Other filesを開くと494pxかつグラフ320pxを確認。Other filesの開閉アニメーション完了を待って寸法を検証した。390pxでは全幅・グラフinert・リサイザー非表示となり、1800pxへ戻すと800pxへ復元。再読み込み後も800pxを維持。1500px画面でEndにより1174px（70%超）まで拡大でき、2560px画面で1920px上限を維持。旧60%設定は1400px画面で840pxへ換算し、1800pxで再読み込みしても840px維持。390px起動では割合設定の換算を保留し、960pxへ広げた時点で576pxへ移行した。
 
 実測結果とスクリーンショット: /private/tmp/changemap-pane-size-qa/（dimensions.json、migration.json、1440-fixed.png、1800-fixed.png、1100-fixed.png、390-full-width.png、1800-restored.png）。広い画面と狭い画面の画像を目視確認済み。
+
+ship-changeで最新origin/mainのGoパッケージ表示を取り込んだ。タスク番号重複はbacklog doctorの修復により今回のタスクをTASK-56へ変更し、既存のGoタスクTASK-55は保持した。設定読み込みの既定値とフォーカス処理を両方維持して競合を解消し、Goパッケージ一覧とコード表示で幅保持・一時縮小・復元を共有する回帰テストを追加した。
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
