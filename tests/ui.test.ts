@@ -8,6 +8,8 @@ import { Graph, statusLabels } from "../src/ui/graph.js";
 import { layoutElements, layoutGraph } from "../src/ui/layout.js";
 import type { ReviewSummary } from "../src/shared/review.js";
 import type { MergedFileNode } from "../src/graph/model.js";
+import { selectNeighborhood } from "../src/graph/select.js";
+import { createMapModel } from "../src/ui/map-model.js";
 const file = (id: string): MergedFileNode => ({
   id,
   oldPath: id,
@@ -48,6 +50,47 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+test("a single Go package stays collapsed, displays its changed count and supports keyboard selection", () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  const paths = ["main.go", "helper.go"];
+  const state = {
+    ...empty,
+    nodes: paths.map((path) => ({ path })),
+    edges: [{ source: "main.go", target: "helper.go" }],
+  };
+  const graph = selectNeighborhood(state, state, [file("main.go").change!]);
+  const onSelect = vi.fn();
+  const props = {
+    graph,
+    direction: "LR" as const,
+    groupByDirectory: true,
+    selected: "go-package:.",
+    onSelect,
+  };
+  const view = render(createElement(Graph, { ...props, model: createMapModel(graph, "packages") }));
+  const pkg = screen.getByRole("button", { name: "Open Go package ." });
+  expect(screen.getByText("1 changed · 2 shown")).toBeTruthy();
+  expect(screen.queryByText("helper.go")).toBeNull();
+  expect(view.container.querySelector(".react-flow__node.selected .package-node")).toBeTruthy();
+  fireEvent.keyDown(pkg, { key: "Enter" });
+  expect(onSelect).toHaveBeenCalledWith("go-package:.");
+  view.rerender(
+    createElement(Graph, {
+      ...props,
+      selected: "before:main.go",
+      model: createMapModel(graph, "files"),
+    }),
+  );
+  expect(screen.getByRole("button", { name: "Open helper.go" })).toBeTruthy();
+  expect(view.container.querySelector(".react-flow__node.selected .file-node")).toBeTruthy();
 });
 test.each(["LR", "RL", "TB", "BT"] as const)(
   "layout %s respects direction and includes isolated files",
