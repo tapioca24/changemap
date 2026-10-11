@@ -135,30 +135,19 @@ The 10,000-node layered case is a known layout limit and is expected to fail.
 CI runs the layout check without timing thresholds; browser timings are a separate
 local measurement.
 
-[Analysis measurements](<backlog/docs/doc-3 - analysis-performance.md>) and
-[rendering measurements](<backlog/docs/doc-4 - rendering-performance.md>) retain
-measurement conditions, reproduction details, and limits. The rendering document
-also preserves the raw results in a JSON block. These synthetic results are not performance guarantees.
 Repository analysis size and displayed graph size measure different workloads.
 Browser timings exclude Git capture and analysis, and Node RSS excludes browser
 memory. Do not present historical results as measurements of a new change.
 
-## Documentation and tasks
+## Documentation
 
-The [README](README.md) covers first use. Detailed user behavior lives in the
-[usage guide](<backlog/docs/doc-1 - usage.md>); keep it aligned with implementation.
-Design rationale lives in [architecture](<backlog/docs/doc-2 - architecture.md>).
-Ongoing work belongs in Backlog tasks; uncommitted ideas belong in drafts.
-The former MVP documents were consolidated under `backlog/docs/`; TASK-16 records
-the old-to-new mapping, including historical references in completed milestones.
+The [README](README.md) covers first use. Keep it aligned with implementation.
 The README screenshot is a real capture of a small TypeScript checkout example,
 stored at `.github/assets/changemap.png`.
 
-Search existing Backlog tasks before planning work. Use the Backlog CLI to create
-and update tasks and documents; do not edit its generated Markdown directly.
-See [AGENTS.md](AGENTS.md) for the task workflow and repository guidelines.
+See [AGENTS.md](AGENTS.md) for repository guidelines.
 
 Use Conventional Commits with Japanese descriptions. Pull requests should explain
-the problem, resulting behavior, related task or issue, and verification. Include
+the problem, resulting behavior, related issue, and verification. Include
 screenshots for UI changes. Publishing and release version changes require the
 maintainer's explicit instruction; package smoke tests do not publish anything.

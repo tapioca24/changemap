@@ -232,9 +232,6 @@ For manual configuration, the theme values are:
   can take substantial time and memory; layout runs synchronously. If layout
   fails, a file selector keeps captured code accessible.
 
-See the [usage guide](https://github.com/tapioca24/changemap/blob/main/backlog/docs/doc-1%20-%20usage.md) for comparison edge cases,
-configuration behavior, supported module references, and Git limitations.
-
 ## Contributing
 
 See [CONTRIBUTING.md](https://github.com/tapioca24/changemap/blob/main/CONTRIBUTING.md)

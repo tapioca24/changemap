@@ -45,9 +45,6 @@ importers:
       '@xyflow/react':
         specifier: ^12.11.6
         version: 12.11.6(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      backlog.md:
-        specifier: 1.51.0
-        version: 1.51.0
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1
@@ -991,40 +988,6 @@ packages:
 
   async@3.2.6:
     resolution: {integrity: sha512-htCUDlxyyCLMgaM3xXg0C0LW2xqfuQ6p05pCEIsXuyQ+a1koYKTuBMzRNwmybfLgvJDMd0r1LTn4+E0Ti6C2AA==}
-
-  backlog.md-darwin-arm64@1.51.0:
-    resolution: {integrity: sha512-gM5rnBo/ZKfGW1nmbd10U9q2hZfOr8U4Q0Nq5naCQbDxoUkXzV+h84wcMybicl/7w2W9r9bjJkasbdqSPplmBw==}
-    cpu: [arm64]
-    os: [darwin]
-
-  backlog.md-darwin-x64@1.51.0:
-    resolution: {integrity: sha512-PO4hiVFCAHlKTE0DgdnhJN49N59mmpcrPvSf/vmnnmQXC6TDt6ScEjuOv7gjflC0xgTdBLdFcMthGbeAxb9JZg==}
-    cpu: [x64]
-    os: [darwin]
-
-  backlog.md-linux-arm64@1.51.0:
-    resolution: {integrity: sha512-+Area163fPlOhSpH2DvXJ1/C22HIVAVGYVAcieOZzhyCczEn/ToyvLg8/j5qxXx6JWBBun/Di+KY5o3TcgAQDg==}
-    cpu: [arm64]
-    os: [linux]
-
-  backlog.md-linux-x64@1.51.0:
-    resolution: {integrity: sha512-+Nz/Rsmh3HsNEBA2TrDtrPVg+WDnhOQsPNmj39LGXfeGsDc4W1GJvNm29jTk9zGBgbE5/4NVp2UfHhNlgOUNIQ==}
-    cpu: [x64]
-    os: [linux]
-
-  backlog.md-windows-arm64@1.51.0:
-    resolution: {integrity: sha512-OHWlT3j7SY44yshx9/KiezMkWnkKSa+qmpjlDoC+xRIUjDK4XNoVd4NWJ+ZbQV7XFfM6d00vUJWP0PP9lIzzTg==}
-    cpu: [arm64]
-    os: [win32]
-
-  backlog.md-windows-x64@1.51.0:
-    resolution: {integrity: sha512-r5uXq1QZislQl0VT5Rmz2ciutTzVYN3l3A2lq+znljRcNPTrVe+9rcOBemDhRIYoEi/YGnEOub/rQS/IZR2eSw==}
-    cpu: [x64]
-    os: [win32]
-
-  backlog.md@1.51.0:
-    resolution: {integrity: sha512-tVNl1XrLThAvnuvP3XgUlofCWsNKP6OWGiWRcIdnyxeL/ovWq/RycWTJDpedUqISoFiPlkUENB2AbH7ag04q7g==}
-    hasBin: true
 
   balanced-match@4.0.4:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
@@ -2495,33 +2458,6 @@ snapshots:
   assertion-error@2.0.1: {}
 
   async@3.2.6: {}
-
-  backlog.md-darwin-arm64@1.51.0:
-    optional: true
-
-  backlog.md-darwin-x64@1.51.0:
-    optional: true
-
-  backlog.md-linux-arm64@1.51.0:
-    optional: true
-
-  backlog.md-linux-x64@1.51.0:
-    optional: true
-
-  backlog.md-windows-arm64@1.51.0:
-    optional: true
-
-  backlog.md-windows-x64@1.51.0:
-    optional: true
-
-  backlog.md@1.51.0:
-    optionalDependencies:
-      backlog.md-darwin-arm64: 1.51.0
-      backlog.md-darwin-x64: 1.51.0
-      backlog.md-linux-arm64: 1.51.0
-      backlog.md-linux-x64: 1.51.0
-      backlog.md-windows-arm64: 1.51.0
-      backlog.md-windows-x64: 1.51.0
 
   balanced-match@4.0.4: {}
 
