@@ -9,8 +9,11 @@
 
 Understand code changes through file dependency maps.
 
-Review local Git changes in your browser. See which TypeScript and Go files depend on
-changed code, follow added or removed dependencies, and read diffs alongside the map.
+Code review means understanding how changes affect related files. A file tree
+organizes files by location; dependency relationships can cross those directories.
+
+changemap visualizes code changes through their relationships with other files,
+helping you understand them quickly. Currently supports TypeScript and Go.
 
 ![Checkout review with 12 connected files: pricing.ts switches discount modules and adds tax calculation, with added and deleted dependencies beside its code diff.](https://raw.githubusercontent.com/tapioca24/changemap/main/.github/assets/changemap.png)
 
@@ -22,222 +25,139 @@ macOS, Linux, and Windows are supported.
 Inside the Git repository you want to review, run:
 
 ```sh
-npx changemap .
+npx changemap
 ```
 
-This compares HEAD with your working tree, including staged changes and
-non-ignored untracked files. Your browser opens automatically. Select a file to
-read its diff or its captured before/after contents.
+Your browser opens with the latest commit's changes. Select a file to read its diff.
+Press **Ctrl+C in the terminal** to stop changemap.
 
-The server listens on `127.0.0.1`. Press **Ctrl+C in the terminal** to stop it;
-closing the browser tab leaves it running.
-
-For repeated use, you can install the command globally:
+Alternatively, install changemap globally:
 
 ```sh
 npm install --global changemap
-changemap .
+changemap
 ```
 
 ## Choose a comparison
 
-Run these commands inside the repository. With a global installation, replace
-`npx changemap` with `changemap`.
+Run these commands inside the repository:
 
-| Command                                   | Before → after                                                  |
-| ----------------------------------------- | --------------------------------------------------------------- |
-| `npx changemap .`                         | HEAD → working tree (all local changes)                         |
-| `npx changemap staged`                    | HEAD → index (staged changes)                                   |
-| `npx changemap working`                   | Index → working tree (unstaged changes)                         |
-| `npx changemap`                           | HEAD's first parent → HEAD                                      |
-| `npx changemap @`                         | Same as the default                                             |
-| `npx changemap feature`                   | The branch tip's first parent → its tip; a commit ID also works |
-| `npx changemap feature main`              | `main` → `feature`                                              |
-| `npx changemap feature main --merge-base` | Merge base of `feature` and `main` → `feature`                  |
+| Command                               | Before → after                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------ |
+| `changemap`                           | HEAD's first parent → HEAD                                                     |
+| `changemap @`                         | Same as the default                                                            |
+| `changemap feature`                   | The branch tip's first parent → its tip; a commit ID also works                |
+| `changemap feature main`              | `main` → `feature`                                                             |
+| `changemap feature main --merge-base` | Merge base of `feature` and `main` → `feature`                                 |
+| `changemap .`                         | HEAD → working tree (all local changes, including non-ignored untracked files) |
+| `changemap staged`                    | HEAD → index (staged changes)                                                  |
+| `changemap working`                   | Index → working tree (unstaged changes, including non-ignored untracked files) |
 
-**With two revisions, the second argument is before and the first is after by default.**
-They are compared directly, so changes made only on the second branch also appear.
-
-For a GitHub pull request or GitLab merge request review, add `--merge-base`:
-
-```sh
-npx changemap <source_branch> <target_branch> --merge-base
-# Example using remote-tracking branches after fetching them:
-npx changemap origin/feature origin/main --merge-base
-```
-
-This compares the branches' merge base (their best common ancestor) to the source
-branch tip, excluding changes made only on the target branch after divergence.
-It uses local Git history; fetch the refs and history needed for the review separately.
-To match a particular MR/PR diff, use its source commit and diff base; the web page
-may show a saved diff version rather than the current local branch tips.
-The flag requires two revisions. Missing or multiple merge bases produce an error.
-The map still includes unchanged files directly connected to changed files.
+**With two revisions, the second argument is before and the first is after.**
+For a GitHub pull request or GitLab merge request review, add `--merge-base` to
+compare the source branch with the branches' common ancestor. Fetch remote branches
+before comparing them locally:
 
 ```sh
-npx changemap . --no-open    # print the URL without opening a browser
-npx changemap . --port 20000 # prefer this port; try the next if occupied
-npx changemap . --port 0     # let the OS choose a free port
-npx changemap --help
+changemap origin/feature origin/main --merge-base
 ```
 
-By default, changemap prefers port 18473. If it is occupied, changemap tries higher
-ports in order (up to 100 ports total) and prints the URL it actually uses.
+The default port is **18473**. If it is in use, changemap tries higher ports in
+order (up to 100 ports total) and prints the URL it uses.
 
 ## Read the map
 
-- Changed TypeScript and Go files appear with their direct dependencies and direct users
-  from both sides of the comparison. Arrows point from the referencing file to
-  its target. The map does not recursively expand the whole project.
-- Go starts in **Packages** view. Select a package to list its changed and related
-  files on the right, then select a file to read its diff or code. Use **Go map →
-  Files** to inspect individual file relationships. TypeScript stays file-based.
-- Other changed files remain accessible under **Outside dependency analysis**.
-  PNG, JPEG, GIF, and WebP files show before/after image previews where available;
-  other binary files have no preview. The usage guide below lists preview limits.
-- **Ignore whitespace** changes only the displayed diff, not file statuses or
-  the dependency map.
-- The map and code stay fixed after capture. When files change, use **Refresh
-  comparison** to replace them; a failed refresh keeps the previous comparison.
-
-### Keyboard shortcuts
-
-Open **Settings** to see the shortcut list, or press **?**. Shortcuts are inactive
-while typing in a text field or interacting with a dialog. Letter keys work in
-uppercase or lowercase; Ctrl, Command, and Alt combinations are left to the browser.
-
-| Key        | Action                                                   |
-| ---------- | -------------------------------------------------------- |
-| `-`        | Zoom out                                                 |
-| `+` or `=` | Zoom in                                                  |
-| `F` or `0` | Fit the entire graph                                     |
-| `R`        | Refresh comparison                                       |
-| `Esc`      | Close the code pane                                      |
-| `E`        | Open the selected file in an editor                      |
-| `C`        | Copy the selected file path (new path for renamed files) |
-| `?`        | Open Settings and show keyboard shortcuts                |
-
-`E` and `C` require a selected file. The editor must be configured and the working
-tree file must be available. The zoom controls show the current percentage between
-**−** and **+**, followed by **Fit**.
+- Changed files appear with their direct dependencies and the files that directly
+  depend on them, including unchanged files. The map does not expand recursively.
+- Changed files outside dependency analysis appear under **Other files**.
+- When files change, use **Refresh comparison** to update the captured map and code.
 
 ### Open files in an editor
 
-Set `VISUAL` or `EDITOR` to an editor command, or pass `--editor` to override
-them for one run. The file path is appended as the last argument. Quote an
-executable path containing spaces. Commands run without a shell.
+changemap opens files with the editor specified by `VISUAL`, falling back to
+`EDITOR`. Use `--editor` to override it:
 
 ```sh
-npx changemap . --editor "code --reuse-window"
+changemap --editor "code --reuse-window"
 ```
 
-Terminal editors such as `vim` open in the terminal where changemap was
-started. If the editor command is missing or fails to start, the code pane
-shows the cause. The editor opens the current working tree file, not a
-temporary copy of the captured comparison.
+The editor opens the current working tree file.
 
 ## Settings
 
-### Go analysis
-
-Go analysis requires **Go on your PATH** (tested with Go 1.26.5) and exactly one
-captured `go.mod`, at the repository root or in a subdirectory. TypeScript and Go
-can coexist. If Go is unavailable, TypeScript analysis and code review remain
-available, with a diagnostic for unanalyzed Go files.
-
-```sh
-npx changemap . --go-os linux --go-arch amd64 --go-tags integration,feature
-```
-
-The default target is the host OS and architecture, with no custom tags. Both
-sides use the same options. The review shows the target, tags, and Go version.
-File suffixes, `//go:build`, and legacy `// +build` constraints select source files;
-excluded files remain accessible outside dependency analysis. Architecture
-feature tags use the baseline for the selected architecture, and cgo is disabled.
-
-Go package nodes show the number of changed files and files included in the map.
-Packages are identified by their repository-relative directory; internal and
-external tests in that directory share the node. Only references directly involving
-changed files select package connections; unrelated imports in other files do not
-expand the map. Connections within a package are hidden in Packages view, including
-when only one package is shown. A moved file is listed in both its old and new packages.
-
-Package arrows are marked added or deleted only when that connection appears or
-disappears across the captured states. Switching declarations inside a package,
-or adding/removing a reference when another file retains the same connection,
-leaves the package arrow unchanged. The Go view choice is remembered in the browser.
-
-In Files view, edges connect references to the files declaring the referenced functions, types,
-variables, fields, or methods, including references within a package. Both
-internal and external `*_test.go` packages are included. Interface calls connect
-to the interface declaration; implementations are not enumerated. Imports alone
-do not create edges to every file in a package.
-
-Only captured sources are analyzed. Standard-library sources, installed modules,
-vendor directories, and local `replace` targets outside the snapshot are not
-read. Consequently, standard-library and external imports can leave type
-information incomplete; resolved internal edges are retained with diagnostics.
-Blank imports are reported as unresolved because package initialization effects
-are not represented by declaration references. Multiple modules and `go.work`
-are unsupported. `testdata`, directories starting with `.` or `_`, symlinks, and
-binary files are excluded. Sources outside the single module are diagnosed.
-
-The bundled helper is compiled using the installed Go toolchain in a temporary
-directory, with a build cache under the system temporary directory. Project code
-is passed as snapshot data, never built or executed. No dependencies or toolchains
-are downloaded. The first Go review can take longer while the helper is compiled.
-
-### Appearance
-
-Choose a theme, map direction, and directory grouping in the toolbar. The 24 themes include Catppuccin
-(Latte, Frappé, Macchiato, and Mocha), Tokyo Night, Rosé Pine, Vitesse, Kanagawa,
-and Everforest variants. Mocha remains the default; the default direction is left
-to right. The additional palettes are bundled with changemap and do not update
-automatically. See [theme sources and licenses](THIRD_PARTY_THEME_NOTICES.md).
-Settings are shared across projects and saved on the first UI setting change.
-With directory grouping off, files share one graph; files from the same directory
-are kept close within each dependency layer where possible.
-
+Settings are shared across projects and saved when you change them in the UI.
 The configuration file is `$XDG_CONFIG_HOME/changemap/config.toml` when
 `XDG_CONFIG_HOME` is an absolute path, otherwise `~/.config/changemap/config.toml`
 on all supported platforms.
 
+You can also edit the file directly. This example shows the defaults; omitted
+settings use their defaults:
+
 ```toml
-theme = "catppuccin-mocha" # e.g. tokyo-night-light, rose-pine-dawn, kanagawa-wave
+theme = "catppuccin-mocha"
 orientation = "LR" # LR | TB | RL | BT
-groupByDirectory = true # true | false
+groupByDirectory = true
+codeFontSize = 12 # 10–24 px
 ```
 
-For manual configuration, the theme values are:
+### Themes
 
-| Family      | Values                                                                                                                                                |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Catppuccin  | `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `catppuccin-mocha`                                                                   |
-| Tokyo Night | `tokyo-night`, `tokyo-night-storm`, `tokyo-night-light`                                                                                               |
-| Rosé Pine   | `rose-pine`, `rose-pine-moon`, `rose-pine-dawn`                                                                                                       |
-| Vitesse     | `vitesse-black`, `vitesse-dark`, `vitesse-dark-soft`, `vitesse-light`, `vitesse-light-soft`                                                           |
-| Kanagawa    | `kanagawa-wave`, `kanagawa-dragon`, `kanagawa-lotus`                                                                                                  |
-| Everforest  | `everforest-dark-hard`, `everforest-dark-medium`, `everforest-dark-soft`, `everforest-light-hard`, `everforest-light-medium`, `everforest-light-soft` |
+| Theme                   | Configuration value       |
+| ----------------------- | ------------------------- |
+| Catppuccin Latte        | `catppuccin-latte`        |
+| Catppuccin Frappé       | `catppuccin-frappe`       |
+| Catppuccin Macchiato    | `catppuccin-macchiato`    |
+| Catppuccin Mocha        | `catppuccin-mocha`        |
+| Tokyo Night             | `tokyo-night`             |
+| Tokyo Night Storm       | `tokyo-night-storm`       |
+| Tokyo Night Light       | `tokyo-night-light`       |
+| Vitesse Black           | `vitesse-black`           |
+| Vitesse Dark            | `vitesse-dark`            |
+| Vitesse Dark Soft       | `vitesse-dark-soft`       |
+| Vitesse Light           | `vitesse-light`           |
+| Vitesse Light Soft      | `vitesse-light-soft`      |
+| Rosé Pine               | `rose-pine`               |
+| Rosé Pine Moon          | `rose-pine-moon`          |
+| Rosé Pine Dawn          | `rose-pine-dawn`          |
+| Kanagawa Wave           | `kanagawa-wave`           |
+| Kanagawa Dragon         | `kanagawa-dragon`         |
+| Kanagawa Lotus          | `kanagawa-lotus`          |
+| Everforest Dark Hard    | `everforest-dark-hard`    |
+| Everforest Dark Medium  | `everforest-dark-medium`  |
+| Everforest Dark Soft    | `everforest-dark-soft`    |
+| Everforest Light Hard   | `everforest-light-hard`   |
+| Everforest Light Medium | `everforest-light-medium` |
+| Everforest Light Soft   | `everforest-light-soft`   |
 
-## Important limits
+See [theme sources and licenses](THIRD_PARTY_THEME_NOTICES.md).
 
-- Comparisons use local Git data and leave the source repository unchanged.
-  GitHub PR and GitLab MR URLs are not supported.
-- Dependency analysis covers TypeScript and Go files. Installed dependencies and files
-  outside the captured repository are not read. Missing configuration presets or
-  unresolved references can make the map incomplete; check the UI notices.
-- Unmerged indexes and working-tree comparisons in sparse checkouts are rejected.
-  Missing historical objects must be fetched separately.
-- Repository contents are captured in memory. Large repositories and dense maps
-  can take substantial time and memory; layout runs synchronously. If layout
-  fails, a file selector keeps captured code accessible.
+### Go analysis
 
-## Contributing
+Go analysis requires **Go on your PATH** and exactly one `go.mod` in the captured
+repository, at the root or in a subdirectory. Without Go, you can still review
+code and use TypeScript dependency maps.
+
+The default analysis target is your host OS and architecture, with no custom build
+tags. To review a different target:
+
+```sh
+changemap --go-os linux --go-arch amd64 --go-tags integration,feature
+```
+
+These options apply to both sides of the comparison. cgo is disabled.
+
+## Known limitations
+
+- Comparisons use local Git history. GitHub PR and GitLab MR URLs are unsupported;
+  missing history must be fetched separately.
+- Dependency analysis covers TypeScript and Go sources captured from the repository.
+  External dependencies are not analyzed, and unresolved references can leave the
+  map incomplete. Check the notices in the UI.
+- Go multi-module repositories and `go.work` workspaces are unsupported.
+- Unmerged indexes and working-tree comparisons in sparse checkouts are unsupported.
+- Large repositories and dense maps can take substantial time and memory.
+
+## Development
 
 See [CONTRIBUTING.md](https://github.com/tapioca24/changemap/blob/main/CONTRIBUTING.md)
 for development, testing, packaging, and benchmark instructions.
-
-## License
-
-[MIT](https://github.com/tapioca24/changemap/blob/main/LICENSE). The license text is
-in the root `LICENSE` file and is included in the distributed package.
