@@ -14,6 +14,7 @@ import type { MapModel } from "../src/ui/map-model.js";
 vi.mock("../src/ui/graph.js", async (original) => ({
   ...(await original<typeof import("../src/ui/graph.js")>()),
   Graph: ({
+    graph,
     model,
     direction,
     groupByDirectory,
@@ -35,6 +36,15 @@ vi.mock("../src/ui/graph.js", async (original) => ({
           n.kind === "package" ? `Open Go package ${n.path}` : `Open ${n.path}`,
         ),
       ),
+      ...graph.merged.nodes
+        .filter((file) => !file.analyzed.before && !file.analyzed.after)
+        .map((file) =>
+          createElement(
+            "button",
+            { key: file.id, onClick: () => onSelect(file.id) },
+            `Open ${file.newPath ?? file.oldPath}`,
+          ),
+        ),
     ),
 }));
 vi.mock("../src/ui/highlight-client.js", () => ({ highlightFile: vi.fn(async () => []) }));
@@ -112,7 +122,12 @@ function api(initial: ReviewSummary) {
           return response({ settings, warning: null });
         }
         return response({
-          settings: { theme: "catppuccin-mocha", orientation: "LR", groupByDirectory: true },
+          settings: {
+            theme: "catppuccin-mocha",
+            orientation: "LR",
+            groupByDirectory: true,
+            codeFontSize: 12,
+          },
           warning: null,
         });
       }
@@ -225,6 +240,7 @@ test("theme and direction remain applied after failed saves and review continues
     theme: "catppuccin-mocha",
     orientation: "LR",
     groupByDirectory: true,
+    codeFontSize: 12,
   });
   fireEvent.click(screen.getByText("Open file.ts"));
   expect(addedCode()).toContain("one");
@@ -263,18 +279,39 @@ test("all bundled themes appear in the existing selector and update the whole ap
   }
 });
 
-test("diff preferences chosen in an empty review survive reopening", async () => {
-  api(snapshot("empty"));
+test("diff preferences can be changed from the code toolbar and survive reopening", async () => {
+  api(snapshot("one", "file.ts"));
   const view = render(createElement(App));
-  await screen.findByText("No changes");
-  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-  fireEvent.click(screen.getByRole("radio", { name: /Split/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
+  fireEvent.click(await screen.findByText("Open file.ts"));
+  fireEvent.click(screen.getByRole("radio", { name: "Split" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Ignore whitespace" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.getByLabelText("File diff").classList.contains("code-split")).toBe(true);
+  fireEvent.click(screen.getByRole("radio", { name: "Unified" }));
+  expect(screen.getByLabelText("File diff").classList.contains("code-split")).toBe(false);
+  fireEvent.click(screen.getByRole("radio", { name: "Split" }));
   expect(decodeURIComponent(document.cookie)).toContain('"layout":"split"');
   view.unmount();
   render(createElement(App));
+  fireEvent.click(await screen.findByText("Open file.ts"));
+  expect(screen.getByRole("radio", { name: "Split" }).getAttribute("aria-checked")).toBe("true");
+  expect(
+    (screen.getByRole("checkbox", { name: "Ignore whitespace" }) as HTMLInputElement).checked,
+  ).toBe(true);
+});
+
+test("code font size is saved and applies to diff and full file views", async () => {
+  const state = api(snapshot("one", "file.ts"));
+  render(createElement(App));
+  fireEvent.click(await screen.findByText("Open file.ts"));
   fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-  expect(screen.getByRole("radio", { name: /Split/ }).getAttribute("aria-checked")).toBe("true");
+  fireEvent.change(screen.getByLabelText("Code font size"), { target: { value: "18" } });
+  expect(screen.queryByRole("radiogroup", { name: "Diff layout" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
+  expect(screen.getByLabelText("File diff").style.fontSize).toBe("18px");
+  fireEvent.click(screen.getByRole("tab", { name: "After" }));
+  expect((await screen.findByLabelText("Full file")).style.fontSize).toBe("18px");
+  await waitFor(() => expect(state.saved.at(-1)?.codeFontSize).toBe(18));
 });
 
 test("selection survives refresh with updated code, then closes when the file disappears", async () => {
@@ -298,9 +335,7 @@ test("pane starts closed, supports keyboard resize, remembers width and returns 
   const file = await screen.findByText("Open file.ts");
   expect(screen.queryByLabelText("Code pane")).toBeNull();
   fireEvent.click(file);
-  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-  fireEvent.click(screen.getByRole("radio", { name: /Split/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Split" }));
   expect(screen.queryByLabelText("Wrap lines")).toBeNull();
   expect(document.cookie).toContain("changemap.workspace=");
   const separator = screen.getByRole("separator");
@@ -326,8 +361,7 @@ test("pane starts closed, supports keyboard resize, remembers width and returns 
   render(createElement(App));
   fireEvent.click(await screen.findByText("Open file.ts"));
   expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe("1114");
-  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-  expect(screen.getByRole("radio", { name: /Split/ }).getAttribute("aria-checked")).toBe("true");
+  expect(screen.getByRole("radio", { name: "Split" }).getAttribute("aria-checked")).toBe("true");
   expect(screen.queryByLabelText("Wrap lines")).toBeNull();
 });
 
@@ -497,7 +531,7 @@ test("wide screens cap the code pane at 1920px and restore that pixel width", as
   expect(separator.getAttribute("aria-valuenow")).toBe("1920");
 });
 
-test("open Other files leaves at least 320px for the graph beside the code pane", async () => {
+test("Other files opens from the graph without taking workspace width", async () => {
   const initial = snapshot("one", "README.md");
   const file = initial.graph.merged.nodes[0];
   api({
@@ -512,14 +546,11 @@ test("open Other files leaves at least 320px for the graph beside the code pane"
   });
   document.cookie = `changemap.workspace=${encodeURIComponent(JSON.stringify({ width: 70, listOpen: true }))}; Path=/`;
   render(createElement(App));
-  fireEvent.click(await screen.findByText("README.md"));
+  fireEvent.click(await screen.findByText("Open README.md"));
   const workspace = screen.getByLabelText("Change map").parentElement!;
   const paneWidth = Number.parseFloat(workspace.style.getPropertyValue("--pane-width"));
-  expect(measuredWidth - paneWidth - 280 - 6).toBe(320);
-  fireEvent.click(screen.getByRole("button", { name: /Close Other files/ }));
-  expect(workspace.style.getPropertyValue("--pane-width")).toBe("1008px");
-  fireEvent.click(screen.getByRole("button", { name: /Open Other files/ }));
-  expect(workspace.style.getPropertyValue("--pane-width")).toBe("834px");
+  expect(paneWidth).toBe(1008);
+  expect(document.querySelector(".other-files-area")).toBeNull();
   expect(decodeURIComponent(document.cookie)).toContain('"width":1008,"widthUnit":"px"');
 });
 
@@ -542,9 +573,8 @@ test("narrow screen returns to the graph without losing selection or remounting 
   expect(screen.getByLabelText("File diff")).toBeTruthy();
 });
 
-test("outside file list can be collapsed and restored; analysis details start collapsed", async () => {
+test("unanalyzed files are selected in the graph while diagnostics start collapsed", async () => {
   const initial = snapshot("one", "README.md");
-  const node = initial.graph.merged.nodes[0];
   api({
     ...initial,
     graph: {
@@ -552,26 +582,15 @@ test("outside file list can be collapsed and restored; analysis details start co
       incomplete: true,
       merged: {
         ...initial.graph.merged,
-        nodes: [{ ...node, analyzed: { before: false, after: false } }],
+        nodes: [{ ...initial.graph.merged.nodes[0], analyzed: { before: false, after: false } }],
       },
     },
   });
-  const view = render(createElement(App));
-  const toggle = await screen.findByRole("button", { name: /Open Other files/ });
-  fireEvent.click(toggle);
-  fireEvent.click(screen.getByText("README.md"));
+  render(createElement(App));
+  fireEvent.click(await screen.findByText("Open README.md"));
   expect(screen.getByLabelText("File diff")).toBeTruthy();
   expect(screen.getByText(/Direct users may be missing/).closest("details")?.open).toBe(false);
-  fireEvent.click(screen.getByRole("button", { name: /Close Other files/ }));
-  expect(screen.getByLabelText("Unanalyzed changed files").getAttribute("aria-hidden")).toBe(
-    "true",
-  );
-  view.unmount();
-  render(createElement(App));
-  const restoredToggle = await screen.findByRole("button", { name: /Other files/ });
-  expect(restoredToggle.getAttribute("aria-expanded")).toBe("false");
-  fireEvent.click(restoredToggle);
-  expect(screen.getByLabelText("Unanalyzed changed files")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Other files/ })).toBeNull();
 });
 
 test("shows the selected Go configuration and retains partial-analysis diagnostics", async () => {

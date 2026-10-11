@@ -188,8 +188,6 @@ export function App() {
             ready={settingsReady}
             warning={settingsWarning}
             onSettingsChange={changeSettings}
-            display={preferences.display}
-            onDisplayChange={(display) => setPreferences((current) => ({ ...current, display }))}
           />
         </div>
       </header>
@@ -225,6 +223,7 @@ export function App() {
                 snapshot={snapshot}
                 direction={settings.orientation}
                 groupByDirectory={settings.groupByDirectory}
+                codeFontSize={settings.codeFontSize}
                 selected={selected}
                 onSelect={setSelected}
                 preferences={preferences}

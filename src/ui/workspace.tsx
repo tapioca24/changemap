@@ -3,10 +3,9 @@ import type { ReviewSummary } from "../shared/review.js";
 import type { Settings } from "../shared/settings.js";
 import { Graph } from "./graph.js";
 import { CodePane, defaultDiffDisplay, type DiffDisplaySettings } from "./code-pane.js";
-import { ArrowLeft, ChevronRight, Files } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { createMapModel, type GoView } from "./map-model.js";
 import { PackagePane } from "./package-pane.js";
-import { StatusBadge } from "./status-badge.js";
 import { Button } from "@base-ui/react/button";
 
 const storageKey = "changemap.workspace";
@@ -16,7 +15,6 @@ const maxCodePanePixels = 1920;
 export interface WorkspacePreferences {
   width: number;
   widthUnit: "px" | "%";
-  listOpen: boolean;
   display: DiffDisplaySettings;
   goView: GoView;
 }
@@ -40,7 +38,6 @@ export function loadPreferences(): WorkspacePreferences {
           : Math.min(70, Math.max(0, value.width))
         : 45,
       widthUnit,
-      listOpen: typeof value?.listOpen === "boolean" ? value.listOpen : false,
       goView: value?.goView === "files" ? "files" : "packages",
       display: {
         layout: value?.display?.layout === "split" ? "split" : "unified",
@@ -54,7 +51,6 @@ export function loadPreferences(): WorkspacePreferences {
     return {
       width: 45,
       widthUnit: "%",
-      listOpen: false,
       display: defaultDiffDisplay,
       goView: "packages",
     };
@@ -73,6 +69,7 @@ export function Workspace({
   snapshot,
   direction,
   groupByDirectory,
+  codeFontSize,
   selected,
   onSelect,
   preferences,
@@ -81,6 +78,7 @@ export function Workspace({
   snapshot: ReviewSummary;
   direction: Settings["orientation"];
   groupByDirectory: boolean;
+  codeFontSize: number;
   selected: string | null;
   onSelect(id: string | null): void;
   preferences: WorkspacePreferences;
@@ -100,7 +98,7 @@ export function Workspace({
     map.nodes.find((item) =>
       item.kind === "file" ? item.id === selected : item.files.some((file) => file.id === selected),
     )?.id ??
-    null;
+    selected;
   const hasGo = snapshot.graph.merged.nodes.some(
     (file) =>
       (file.analyzed.before && file.oldPath?.endsWith(".go")) ||
@@ -114,11 +112,7 @@ export function Workspace({
   const node = snapshot.graph.merged.nodes.find((file) => file.id === selected);
   const open = paneOpen && (showPackageFiles ? !!activePackage : !!node);
   const narrow = width > 0 && width < 960;
-  const outside = snapshot.graph.merged.nodes.filter(
-    (file) => !file.analyzed.before && !file.analyzed.after,
-  );
-  const otherFilesWidth = narrow ? 220 : 280;
-  const graphMinimum = preferences.listOpen && outside.length ? otherFilesWidth + 320 : 320;
+  const graphMinimum = 320;
   const maximum =
     width && !narrow
       ? Math.max(0, Math.min(maxCodePanePixels, width - graphMinimum - 6))
@@ -206,52 +200,6 @@ export function Workspace({
           </div>
         )}
         <div className="map-body">
-          {!!outside.length && (
-            <section
-              id="outside-files"
-              className={`unanalyzed${preferences.listOpen ? " is-open" : ""}`}
-              aria-label="Unanalyzed changed files"
-              inert={!preferences.listOpen}
-              aria-hidden={!preferences.listOpen}
-            >
-              <div className="unanalyzed-heading">
-                <h2>
-                  Other files <span>{outside.length}</span>
-                </h2>
-                <p>Outside dependency analysis</p>
-              </div>
-              <div className="unanalyzed-list">
-                {outside.map((file) => (
-                  <button
-                    className={`unanalyzed-node ${file.status}`}
-                    key={file.id}
-                    aria-pressed={selected === file.id}
-                    onClick={() => select(file.id)}
-                  >
-                    <StatusBadge status={file.status} />
-                    <strong>{file.newPath ?? file.oldPath}</strong>
-                    {file.change?.binary && <small>Binary</small>}
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-          {!!outside.length && (
-            <Button
-              className={`other-files-toggle${preferences.listOpen ? " is-open" : ""}`}
-              aria-label={
-                preferences.listOpen ? "Close Other files" : `Open Other files (${outside.length})`
-              }
-              aria-expanded={preferences.listOpen}
-              aria-controls="outside-files"
-              onClick={() =>
-                setPreferences((current) => ({ ...current, listOpen: !current.listOpen }))
-              }
-            >
-              <Files aria-hidden="true" />
-              <span>{preferences.listOpen ? "Close" : `Other files · ${outside.length}`}</span>
-            </Button>
-          )}
           {(selected || activePackage) && !open && (
             <Button className="reopen-code" onClick={() => setPaneOpen(true)}>
               {showPackageFiles ? "Open selected package" : "Open selected file"}{" "}
@@ -336,6 +284,10 @@ export function Workspace({
                   snapshot={snapshot}
                   node={node}
                   display={preferences.display}
+                  codeFontSize={codeFontSize}
+                  onDisplayChange={(display) =>
+                    setPreferences((current) => ({ ...current, display }))
+                  }
                   onClose={close}
                   closeButtonRef={closeButton}
                   narrow={narrow}

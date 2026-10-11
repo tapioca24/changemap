@@ -1,20 +1,9 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { Popover } from "@base-ui/react/popover";
-import { RadioGroup } from "@base-ui/react/radio-group";
-import { Radio } from "@base-ui/react/radio";
 import { Checkbox } from "@base-ui/react/checkbox";
 import type { ReviewSummary } from "../shared/review.js";
 import { themes, orientations, type Settings } from "../shared/settings.js";
-import type { DiffDisplaySettings } from "./code-pane.js";
-import {
-  Check,
-  ChevronDown,
-  Columns2,
-  Info,
-  Settings as SettingsIcon,
-  TextAlignStart,
-  X,
-} from "lucide-react";
+import { Check, ChevronDown, Info, Settings as SettingsIcon, X } from "lucide-react";
 import { themeName } from "./themes.js";
 
 // Base UI owns composite interactions (dialogs, popovers, tabs, radio and checkbox state).
@@ -79,15 +68,11 @@ export function SettingsDialog({
   ready,
   warning,
   onSettingsChange,
-  display,
-  onDisplayChange,
 }: {
   settings: Settings;
   ready: boolean;
   warning: string | null;
   onSettingsChange(next: Settings): void;
-  display: DiffDisplaySettings;
-  onDisplayChange(next: DiffDisplaySettings): void;
 }) {
   return (
     <Dialog.Root>
@@ -195,52 +180,23 @@ export function SettingsDialog({
                   <strong>Group files by directory</strong>
                 </span>
               </label>
-              <fieldset className="diff-layout-field">
-                <legend>Diff layout</legend>
-                <RadioGroup
-                  className="layout-choices"
-                  value={display.layout}
-                  onValueChange={(value) =>
-                    onDisplayChange({ ...display, layout: value as DiffDisplaySettings["layout"] })
-                  }
-                >
-                  <label className="layout-choice">
-                    <Radio.Root value="unified" className="layout-radio">
-                      <Radio.Indicator />
-                    </Radio.Root>
-                    <TextAlignStart className="layout-icon" aria-hidden="true" />
-                    <span>
-                      <strong>Unified</strong>
-                      <small>Changes in one column</small>
-                    </span>
-                  </label>
-                  <label className="layout-choice">
-                    <Radio.Root value="split" className="layout-radio">
-                      <Radio.Indicator />
-                    </Radio.Root>
-                    <Columns2 className="layout-icon" aria-hidden="true" />
-                    <span>
-                      <strong>Split</strong>
-                      <small>Before and after side by side</small>
-                    </span>
-                  </label>
-                </RadioGroup>
-              </fieldset>
-              <label className="whitespace-choice">
-                <Checkbox.Root
-                  checked={display.ignoreWhitespace}
-                  onCheckedChange={(checked) =>
-                    onDisplayChange({ ...display, ignoreWhitespace: checked === true })
-                  }
-                  className="settings-checkbox"
-                >
-                  <Checkbox.Indicator className="settings-checkbox-indicator">
-                    <Check aria-hidden="true" />
-                  </Checkbox.Indicator>
-                </Checkbox.Root>
-                <span>
-                  <strong>Ignore whitespace</strong>
-                  <small>Hide whitespace-only changes in Diff</small>
+              <label className="settings-field">
+                Code font size
+                <span className="settings-select-wrap">
+                  <select
+                    value={settings.codeFontSize}
+                    disabled={!ready}
+                    onChange={(event) =>
+                      onSettingsChange({ ...settings, codeFontSize: Number(event.target.value) })
+                    }
+                  >
+                    {Array.from({ length: 15 }, (_, i) => i + 10).map((size) => (
+                      <option key={size} value={size}>
+                        {size}px
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown aria-hidden="true" />
                 </span>
               </label>
             </div>

@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useEffect, useState, type CSSProperties } from "react";
+import { memo, useCallback, useMemo, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ReactFlow,
   Background,
@@ -17,6 +17,7 @@ import {
 import {
   layoutMap,
   type DirectoryNodeData,
+  type OtherFilesNodeData,
   type FileNodeData,
   type PackageNodeData,
 } from "./layout.js";
@@ -61,7 +62,9 @@ const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileNodeData>>)
         }
       }}
     >
-      <Handle type="target" position={target} />
+      {(data.file.analyzed.before || data.file.analyzed.after) && (
+        <Handle type="target" position={target} />
+      )}
       {data.file.status !== "unchanged" && <StatusBadge status={data.file.status} />}
       <strong title={path}>{path.split("/").pop()}</strong>
       {data.directoryPath && (
@@ -70,7 +73,9 @@ const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileNodeData>>)
         </span>
       )}
       {data.unresolved && <span className="unresolved">! Unresolved references</span>}
-      <Handle type="source" position={source} />
+      {(data.file.analyzed.before || data.file.analyzed.after) && (
+        <Handle type="source" position={source} />
+      )}
     </div>
   );
 });
@@ -116,8 +121,23 @@ const PackageNode = memo(function PackageNode({ data }: NodeProps<Node<PackageNo
     </div>
   );
 });
-const nodeTypes = { file: FileNode, package: PackageNode, directory: DirectoryNode };
-function DependencyEdge({
+const OtherFilesNode = memo(function OtherFilesNode({ data }: NodeProps<Node<OtherFilesNodeData>>) {
+  return (
+    <div className="other-files-node">
+      <strong>
+        Other files <span>{data.count}</span>
+      </strong>
+      <p>Outside dependency analysis</p>
+    </div>
+  );
+});
+const nodeTypes = {
+  file: FileNode,
+  package: PackageNode,
+  directory: DirectoryNode,
+  "other-files": OtherFilesNode,
+};
+export function DependencyEdge({
   id,
   data,
   label,
@@ -134,6 +154,13 @@ function DependencyEdge({
     muted: boolean;
   }>
 >) {
+  const { getViewport, setViewport } = useReactFlow();
+  const drag = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    viewport: ReturnType<typeof getViewport>;
+  } | null>(null);
   const { path, bounds, labelX, labelY } = edgePath(
     data!.points,
     data!.direction,
@@ -154,7 +181,40 @@ function DependencyEdge({
   const linearFade = forward && span > edgeAppearance.fadeDistance * 4;
   const fadeOffset = `${(edgeAppearance.fadeDistance / span) * 100}%`;
   return (
-    <>
+    <g
+      onPointerDown={(event) => {
+        if (event.button !== 0 || !event.isPrimary) return;
+        event.preventDefault();
+        event.stopPropagation();
+        drag.current = {
+          pointerId: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          viewport: getViewport(),
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const current = drag.current;
+        if (!current || current.pointerId !== event.pointerId) return;
+        void setViewport({
+          ...current.viewport,
+          x: current.viewport.x + event.clientX - current.x,
+          y: current.viewport.y + event.clientY - current.y,
+        });
+      }}
+      onPointerUp={(event) => {
+        if (drag.current?.pointerId !== event.pointerId) return;
+        drag.current = null;
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+      }}
+      onLostPointerCapture={() => {
+        drag.current = null;
+      }}
+    >
       {data!.animate && (
         <path
           d={path}
@@ -255,7 +315,7 @@ function DependencyEdge({
           />
         </>
       )}
-    </>
+    </g>
   );
 }
 const edgeTypes = { dependency: DependencyEdge };
@@ -328,11 +388,19 @@ export const Graph = memo(function Graph({
   } | null>(null);
   const { nodes, routes, fileBounds, failed } = useMemo(() => {
     try {
-      return { ...layoutMap(map, direction, groupByDirectory), failed: false };
+      return {
+        ...layoutMap(
+          map,
+          direction,
+          groupByDirectory,
+          graph.merged.nodes.filter((file) => !file.analyzed.before && !file.analyzed.after),
+        ),
+        failed: false,
+      };
     } catch {
       return { nodes: [], routes: [], fileBounds: new Map(), failed: true };
     }
-  }, [map, direction, groupByDirectory]);
+  }, [map, direction, groupByDirectory, graph.merged.nodes]);
   const selectableNodes = useMemo(
     () =>
       nodes.map((node) =>
@@ -429,13 +497,11 @@ export const Graph = memo(function Graph({
             }}
           >
             <option value="">Select a file</option>
-            {graph.merged.nodes
-              .filter((node) => node.analyzed.before || node.analyzed.after)
-              .map((node) => (
-                <option key={node.id} value={node.id}>
-                  {statusLabels[node.status]} · {node.newPath ?? node.oldPath}
-                </option>
-              ))}
+            {graph.merged.nodes.map((node) => (
+              <option key={node.id} value={node.id}>
+                {statusLabels[node.status]} · {node.newPath ?? node.oldPath}
+              </option>
+            ))}
           </select>
         </label>
       </div>

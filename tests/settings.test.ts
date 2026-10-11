@@ -34,15 +34,22 @@ test("startup creates nothing; first change saves and restart restores settings"
       theme: "everforest-light-medium",
       orientation: "BT",
       groupByDirectory: false,
+      codeFontSize: 12,
     }),
   ).toEqual({
-    settings: { theme: "everforest-light-medium", orientation: "BT", groupByDirectory: false },
+    settings: {
+      theme: "everforest-light-medium",
+      orientation: "BT",
+      groupByDirectory: false,
+      codeFontSize: 12,
+    },
     warning: null,
   });
   expect((await SettingsStore.load(path)).state.settings).toEqual({
     theme: "everforest-light-medium",
     orientation: "BT",
     groupByDirectory: false,
+    codeFontSize: 12,
   });
   expect(await readdir(root)).toEqual(["config.toml"]);
 });
@@ -53,11 +60,14 @@ test("existing config without directory grouping keeps the grouped default", asy
     theme: "catppuccin-latte",
     orientation: "TB",
     groupByDirectory: true,
+    codeFontSize: 12,
   });
 });
 test.each(themes)("theme %s survives a settings store restart", async (theme) => {
   const { path } = await fixture();
-  await (await SettingsStore.load(path)).save({ theme, orientation: "LR", groupByDirectory: true });
+  await (
+    await SettingsStore.load(path)
+  ).save({ theme, orientation: "LR", groupByDirectory: true, codeFontSize: 12 });
   expect((await SettingsStore.load(path)).state.settings.theme).toBe(theme);
 });
 test.each(["theme = [", 'theme = "unknown"', 'theme = "mocha"', 'groupByDirectory = "false"'])(
@@ -69,8 +79,14 @@ test.each(["theme = [", 'theme = "unknown"', 'theme = "mocha"', 'groupByDirector
     expect(store.state.warning).toContain("could not be loaded");
     expect(store.state.settings).toEqual(defaults);
     expect(
-      (await store.save({ theme: "catppuccin-frappe", orientation: "RL", groupByDirectory: false }))
-        .settings.theme,
+      (
+        await store.save({
+          theme: "catppuccin-frappe",
+          orientation: "RL",
+          groupByDirectory: false,
+          codeFontSize: 12,
+        })
+      ).settings.theme,
     ).toBe("catppuccin-frappe");
     expect(await readFile(path, "utf8")).toBe(text);
   },
@@ -84,8 +100,14 @@ test("failed save preserves the old file and applies session settings", async ()
   await mkdir(path);
   await writeFile(join(path, "original"), "preserve");
   expect(
-    (await store.save({ theme: "catppuccin-latte", orientation: "TB", groupByDirectory: false }))
-      .warning,
+    (
+      await store.save({
+        theme: "catppuccin-latte",
+        orientation: "TB",
+        groupByDirectory: false,
+        codeFontSize: 12,
+      })
+    ).warning,
   ).toContain("could not be saved");
   expect(store.state.settings.theme).toBe("catppuccin-latte");
   expect(await readFile(join(path, "original"), "utf8")).toBe("preserve");
@@ -94,13 +116,24 @@ test("corruption after startup is preserved and queued saves finish in order", a
   const { path } = await fixture();
   const store = await SettingsStore.load(path);
   await Promise.all([
-    store.save({ theme: "catppuccin-latte", orientation: "TB", groupByDirectory: true }),
-    store.save({ theme: "catppuccin-macchiato", orientation: "RL", groupByDirectory: false }),
+    store.save({
+      theme: "catppuccin-latte",
+      orientation: "TB",
+      groupByDirectory: true,
+      codeFontSize: 12,
+    }),
+    store.save({
+      theme: "catppuccin-macchiato",
+      orientation: "RL",
+      groupByDirectory: false,
+      codeFontSize: 12,
+    }),
   ]);
   expect((await SettingsStore.load(path)).state.settings).toEqual({
     theme: "catppuccin-macchiato",
     orientation: "RL",
     groupByDirectory: false,
+    codeFontSize: 12,
   });
   await writeFile(path, "broken = [");
   expect((await store.save(defaults)).warning).toBeTruthy();
@@ -112,3 +145,23 @@ test("unknown TOML settings survive a successful save", async () => {
   await (await SettingsStore.load(path)).save(defaults);
   expect(await readFile(path, "utf8")).toContain('future = "keep"');
 });
+
+test("code font size is restored and legacy configs use 12px", async () => {
+  const { path } = await fixture();
+  await writeFile(path, 'theme = "catppuccin-mocha"\n');
+  const store = await SettingsStore.load(path);
+  expect(store.state.settings.codeFontSize).toBe(12);
+  await store.save({ ...defaults, codeFontSize: 18 });
+  expect((await SettingsStore.load(path)).state.settings.codeFontSize).toBe(18);
+});
+test.each([9, 25, 12.5, "18", null])(
+  "invalid font size %s preserves the config",
+  async (codeFontSize) => {
+    const { path } = await fixture();
+    const store = await SettingsStore.load(path);
+    await expect(store.save({ ...defaults, codeFontSize } as never)).rejects.toThrow(
+      "Invalid settings",
+    );
+    await expect(readFile(path)).rejects.toMatchObject({ code: "ENOENT" });
+  },
+);

@@ -7,10 +7,12 @@ import { diffLines, sourceLines, splitDiffLines, type DiffLine } from "./code-li
 import { references } from "./graph.js";
 import { highlightFile } from "./highlight-client.js";
 import type { CodeToken, TokenLines } from "./highlight-engine.js";
+import { RadioGroup } from "@base-ui/react/radio-group";
+import { Radio } from "@base-ui/react/radio";
 import { Tabs } from "@base-ui/react/tabs";
 import { Popover } from "@base-ui/react/popover";
 import { Button } from "@base-ui/react/button";
-import { Check, Copy, ExternalLink, Info, X } from "lucide-react";
+import { Check, Columns2, Copy, ExternalLink, Info, TextAlignStart, X } from "lucide-react";
 import { StatusBadge } from "./status-badge.js";
 import type { Ref } from "react";
 
@@ -285,6 +287,8 @@ export function CodePane({
   snapshot,
   node,
   display = defaultDiffDisplay,
+  onDisplayChange,
+  codeFontSize = 12,
   onClose,
   closeButtonRef,
   narrow = false,
@@ -292,6 +296,8 @@ export function CodePane({
   snapshot: ReviewSummary;
   node: MergedFileNode;
   display?: DiffDisplaySettings;
+  onDisplayChange?(next: DiffDisplaySettings): void;
+  codeFontSize?: number;
   onClose?: () => void;
   closeButtonRef?: Ref<HTMLButtonElement>;
   narrow?: boolean;
@@ -437,6 +443,7 @@ export function CodePane({
       )}
       <pre
         className={`code${mode === "diff" ? " code-diff" : ""}${mode === "diff" && display.layout === "split" ? " code-split" : ""}`}
+        style={{ fontSize: `${codeFontSize}px` }}
         aria-label={mode === "diff" ? "File diff" : "Full file"}
         tabIndex={0}
       >
@@ -607,13 +614,46 @@ export function CodePane({
           value={mode}
           onValueChange={(value) => setMode(value as typeof mode)}
         >
-          <Tabs.List className="code-tabs" aria-label="Content view">
-            {views.map((view) => (
-              <Tabs.Tab key={view} value={view}>
-                {view === "diff" ? "Diff" : view === "before" ? "Before" : "After"}
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
+          <div className="code-view-toolbar">
+            <Tabs.List className="code-tabs" aria-label="Content view">
+              {views.map((view) => (
+                <Tabs.Tab key={view} value={view}>
+                  {view === "diff" ? "Diff" : view === "before" ? "Before" : "After"}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+            {views.includes("diff") && onDisplayChange && (
+              <div className="diff-display-controls" role="group" aria-label="Diff display">
+                <RadioGroup
+                  className="diff-layout-toggle"
+                  aria-label="Diff layout"
+                  value={display.layout}
+                  onValueChange={(layout) =>
+                    onDisplayChange({ ...display, layout: layout as DiffDisplaySettings["layout"] })
+                  }
+                >
+                  <Radio.Root value="unified" className="diff-layout-option" aria-label="Unified">
+                    <TextAlignStart aria-hidden="true" />
+                    Unified
+                  </Radio.Root>
+                  <Radio.Root value="split" className="diff-layout-option" aria-label="Split">
+                    <Columns2 aria-hidden="true" />
+                    Split
+                  </Radio.Root>
+                </RadioGroup>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={display.ignoreWhitespace}
+                    onChange={(event) =>
+                      onDisplayChange({ ...display, ignoreWhitespace: event.target.checked })
+                    }
+                  />
+                  Ignore whitespace
+                </label>
+              </div>
+            )}
+          </div>
           {views.map((view) => (
             <Tabs.Panel key={view} value={view} className="code-tab-panel">
               {view === mode && content}
