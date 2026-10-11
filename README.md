@@ -5,6 +5,18 @@
   </picture>
 </p>
 
+<p align="center">
+  <a aria-label="npm" href="https://badge.fury.io/js/changemap">
+    <img src="https://img.shields.io/npm/v/changemap?style=for-the-badge&labelColor=223843" alt="npm version">
+  </a>
+  <a aria-label="build" href="https://github.com/tapioca24/changemap/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/tapioca24/changemap/ci.yml?branch=main&style=for-the-badge&labelColor=223843" alt="build status">
+  </a>
+  <a aria-label="license" href="https://github.com/tapioca24/changemap/blob/main/LICENSE">
+    <img src="https://img.shields.io/npm/l/changemap?style=for-the-badge&labelColor=223843" alt="license">
+  </a>
+</p>
+
 # changemap
 
 Understand code changes through file dependency maps.
