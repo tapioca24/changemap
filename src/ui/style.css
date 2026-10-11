@@ -682,11 +682,12 @@ p {
   flex-shrink: 0;
 }
 .wordmark {
-  color: var(--text);
+  display: flex;
+  align-items: center;
   text-decoration: none;
-  font-size: 20px;
-  font-weight: 750;
-  letter-spacing: -1px;
+}
+.wordmark img {
+  display: block;
 }
 main {
   padding: 0;
@@ -1105,8 +1106,6 @@ footer {
   white-space: nowrap;
 }
 .wordmark {
-  font-size: 17px;
-  letter-spacing: -0.7px;
   flex-shrink: 0;
 }
 .header-comparison,

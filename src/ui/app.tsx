@@ -8,6 +8,8 @@ import { Workspace, loadPreferences, savePreferences } from "./workspace.js";
 import { SettingsDialog, SnapshotDetails } from "./review-controls.js";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@base-ui/react/button";
+import logoDark from "../../.github/assets/logo-dark.svg";
+import logoLight from "../../.github/assets/logo-light.svg";
 import "./style.css";
 
 export function App() {
@@ -161,7 +163,12 @@ export function App() {
     >
       <header className="topbar">
         <a className="wordmark" href="/">
-          ↗ changemap
+          <img
+            src={isLightTheme(settings.theme) ? logoLight : logoDark}
+            alt="changemap"
+            width="125"
+            height="32"
+          />
         </a>
         {snapshot && (
           <div className="header-comparison" role="group" aria-label="Comparison targets">

@@ -6,6 +6,9 @@ import { App } from "../src/ui/app.js";
 import type { ReviewSummary, ReviewStatus } from "../src/shared/review.js";
 import type { Settings } from "../src/shared/settings.js";
 import { themes } from "../src/shared/settings.js";
+import { isLightTheme } from "../src/ui/themes.js";
+import logoDark from "../.github/assets/logo-dark.svg";
+import logoLight from "../.github/assets/logo-light.svg";
 import type { ReviewGraph } from "../src/graph/model.js";
 import type { MapModel } from "../src/ui/map-model.js";
 
@@ -270,12 +273,15 @@ test("all bundled themes appear in the existing selector and update the whole ap
   );
   const selector = screen.getByLabelText("Theme") as HTMLSelectElement;
   expect([...selector.options].map((option) => option.value)).toEqual(themes);
-  for (const theme of themes.slice(4)) {
+  for (const theme of themes) {
     fireEvent.change(selector, { target: { value: theme } });
     const app = container.querySelector<HTMLElement>(".app");
     expect(app?.dataset.theme).toBe(theme);
     expect(app?.style.getPropertyValue("--base")).toMatch(/^#[0-9a-f]{6}$/);
     expect(app?.style.getPropertyValue("--text")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(screen.getByAltText("changemap").getAttribute("src")).toBe(
+      isLightTheme(theme) ? logoLight : logoDark,
+    );
   }
 });
 
