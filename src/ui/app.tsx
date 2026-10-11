@@ -1,3 +1,4 @@
+import { useShortcuts } from "./shortcuts.js";
 import { useEffect, useRef, useState } from "react";
 import type { ReviewStatus, ReviewSummary } from "../shared/review.js";
 import { defaults, type Settings, type SettingsState } from "../shared/settings.js";
@@ -14,6 +15,8 @@ export function App() {
   const [status, setStatus] = useState<ReviewStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState("display");
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>(defaults);
@@ -114,6 +117,17 @@ export function App() {
       setBusy(false);
     }
   }
+  useShortcuts((key, event) => {
+    if (key === "?") {
+      setSettingsSection("shortcuts");
+      setSettingsOpen(true);
+      return true;
+    }
+    if (key === "r") {
+      if (!event.repeat && !busy && !status?.refreshing) void refresh();
+      return true;
+    }
+  });
   const stale = status?.stale || (snapshot && status && snapshot.id !== status.snapshotId);
   const notice = error ?? status?.error ?? connectionError;
   const refreshButton = (
@@ -184,6 +198,10 @@ export function App() {
           )}
           {refreshButton}
           <SettingsDialog
+            section={settingsSection}
+            onSectionChange={setSettingsSection}
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
             settings={settings}
             ready={settingsReady}
             warning={settingsWarning}

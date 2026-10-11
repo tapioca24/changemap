@@ -1,3 +1,4 @@
+import { useEditorFile, type EditorActions } from "./file-actions.js";
 import { useEffect, useRef, useState } from "react";
 import type { MergedFileNode } from "../graph/model.js";
 import type { CapturedFile, ReviewSummary } from "../shared/review.js";
@@ -161,13 +162,6 @@ export const defaultDiffDisplay: DiffDisplaySettings = {
   ignoreWhitespace: false,
 };
 
-interface EditorFileState {
-  available: boolean;
-  path: string;
-  differs: boolean;
-  reason?: string;
-}
-
 function CopyPathButton({ path }: { path: string }) {
   const [result, setResult] = useState<"idle" | "copied" | "error">("idle");
   useEffect(() => {
@@ -292,6 +286,7 @@ export function CodePane({
   onClose,
   closeButtonRef,
   narrow = false,
+  editorActions,
 }: {
   snapshot: ReviewSummary;
   node: MergedFileNode;
@@ -301,58 +296,11 @@ export function CodePane({
   onClose?: () => void;
   closeButtonRef?: Ref<HTMLButtonElement>;
   narrow?: boolean;
+  editorActions?: EditorActions;
 }) {
-  const editorKey = JSON.stringify([snapshot.id, node.id]);
-  const [editorFile, setEditorFile] = useState<{ key: string; value: EditorFileState } | null>(
-    null,
-  );
-  const [editorBusy, setEditorBusy] = useState(false);
-  const [editorMessage, setEditorMessage] = useState("");
-  const [editorError, setEditorError] = useState("");
-  const currentEditorFile = editorFile?.key === editorKey ? editorFile.value : null;
-  const editorUrl = `/api/editor?${new URLSearchParams({ snapshot: snapshot.id, node: node.id })}`;
-  useEffect(() => {
-    let disposed = false;
-    request<EditorFileState>(editorUrl)
-      .then((value) => {
-        if (!disposed) setEditorFile({ key: editorKey, value });
-      })
-      .catch((error: Error) => {
-        if (!disposed)
-          setEditorFile({
-            key: editorKey,
-            value: {
-              available: false,
-              path: node.newPath ?? node.oldPath ?? "",
-              differs: false,
-              reason: error.message,
-            },
-          });
-      });
-    return () => {
-      disposed = true;
-    };
-  }, [editorKey, editorUrl, node.newPath, node.oldPath]);
-  async function openInEditor() {
-    setEditorBusy(true);
-    setEditorMessage("");
-    setEditorError("");
-    try {
-      await request(editorUrl, "POST");
-      setEditorMessage(
-        "Opened in editor. If it uses a terminal, switch to the terminal running changemap.",
-      );
-    } catch (error) {
-      setEditorError(error instanceof Error ? error.message : String(error));
-      try {
-        setEditorFile({ key: editorKey, value: await request<EditorFileState>(editorUrl) });
-      } catch {
-        // The POST error is the useful message; another availability check can wait.
-      }
-    } finally {
-      setEditorBusy(false);
-    }
-  }
+  const ownEditor = useEditorFile(snapshot.id, node, !editorActions);
+  const { currentEditorFile, editorBusy, editorMessage, editorError, openInEditor } =
+    editorActions ?? ownEditor;
   const hasTextChanges =
     !!node.change?.patch &&
     diffLines(node.change.patch).some((line) => line.kind === "add" || line.kind === "delete");
