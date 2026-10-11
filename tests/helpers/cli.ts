@@ -12,7 +12,7 @@ export async function launchCli(cwd: string, args: string[]) {
   let stdout = "";
   let stderr = "";
   const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) =>
-    child.once("exit", (code, signal) => resolve({ code, signal })),
+    child.once("close", (code, signal) => resolve({ code, signal })),
   );
   child.stderr.on("data", (data) => {
     stderr += data.toString();
@@ -42,6 +42,33 @@ export async function launchCli(cwd: string, args: string[]) {
   return {
     url,
     output: () => stdout,
+    waitForOutput(expected: string) {
+      return new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          clearTimeout(timer);
+          child.stdout.removeListener("data", check);
+          child.removeListener("close", onClose);
+        };
+        const check = () => {
+          if (stdout.includes(expected)) {
+            cleanup();
+            resolve();
+          }
+        };
+        const onClose = () => {
+          cleanup();
+          reject(new Error(`CLI closed before output ${expected}: ${stdout}\n${stderr}`));
+        };
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error(`CLI output timed out waiting for ${expected}: ${stdout}\n${stderr}`));
+        }, 5000);
+        child.stdout.on("data", check);
+        child.once("close", onClose);
+        check();
+        if (!stdout.includes(expected) && child.stdout.destroyed) onClose();
+      });
+    },
     async stop(signal: NodeJS.Signals = "SIGTERM") {
       child.kill(signal);
       const timer = setTimeout(() => child.kill("SIGKILL"), 5000);

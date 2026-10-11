@@ -206,6 +206,7 @@ test("CLI reports when it uses a port above the preferred port", async () => {
     try {
       const actual = Number(new URL(running.url).port);
       expect(actual).toBeGreaterThan(preferredPort);
+      await running.waitForOutput(`Port ${preferredPort} is in use; using ${actual}.`);
     } finally {
       await running.stop();
     }
