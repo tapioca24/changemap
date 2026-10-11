@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useEffect, useState, type CSSProperties } from "react";
+import { memo, useCallback, useMemo, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ReactFlow,
   Background,
@@ -117,7 +117,7 @@ const PackageNode = memo(function PackageNode({ data }: NodeProps<Node<PackageNo
   );
 });
 const nodeTypes = { file: FileNode, package: PackageNode, directory: DirectoryNode };
-function DependencyEdge({
+export function DependencyEdge({
   id,
   data,
   label,
@@ -134,6 +134,13 @@ function DependencyEdge({
     muted: boolean;
   }>
 >) {
+  const { getViewport, setViewport } = useReactFlow();
+  const drag = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    viewport: ReturnType<typeof getViewport>;
+  } | null>(null);
   const { path, bounds, labelX, labelY } = edgePath(
     data!.points,
     data!.direction,
@@ -154,7 +161,40 @@ function DependencyEdge({
   const linearFade = forward && span > edgeAppearance.fadeDistance * 4;
   const fadeOffset = `${(edgeAppearance.fadeDistance / span) * 100}%`;
   return (
-    <>
+    <g
+      onPointerDown={(event) => {
+        if (event.button !== 0 || !event.isPrimary) return;
+        event.preventDefault();
+        event.stopPropagation();
+        drag.current = {
+          pointerId: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          viewport: getViewport(),
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const current = drag.current;
+        if (!current || current.pointerId !== event.pointerId) return;
+        void setViewport({
+          ...current.viewport,
+          x: current.viewport.x + event.clientX - current.x,
+          y: current.viewport.y + event.clientY - current.y,
+        });
+      }}
+      onPointerUp={(event) => {
+        if (drag.current?.pointerId !== event.pointerId) return;
+        drag.current = null;
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+      }}
+      onLostPointerCapture={() => {
+        drag.current = null;
+      }}
+    >
       {data!.animate && (
         <path
           d={path}
@@ -255,7 +295,7 @@ function DependencyEdge({
           />
         </>
       )}
-    </>
+    </g>
   );
 }
 const edgeTypes = { dependency: DependencyEdge };
