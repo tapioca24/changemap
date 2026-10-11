@@ -391,14 +391,50 @@ p {
 .react-flow__attribution a {
   color: var(--subtext0);
 }
-.react-flow__controls {
+.graph-controls {
+  display: flex;
+  align-items: center;
   gap: 4px;
-  background: transparent;
-  box-shadow: none;
-}
-.react-flow__controls-button {
+  padding: 4px;
+  background: var(--mantle);
   border: 1px solid var(--surface1);
+  border-radius: 8px;
+  color: var(--subtext1);
+}
+.graph-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  min-width: 30px;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
   border-radius: 4px;
+}
+.graph-controls button:hover {
+  background: var(--surface0);
+}
+.graph-controls button:disabled {
+  opacity: 0.4;
+}
+.graph-controls svg {
+  width: 14px;
+  height: 14px;
+}
+.graph-controls output {
+  min-width: 48px;
+  text-align: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.graph-controls .fit-graph {
+  border-left: 1px solid var(--surface1);
+  border-radius: 0;
+  padding-inline: 10px;
+  font-size: 11px;
 }
 .react-flow__handle {
   background: var(--overlay1);
@@ -1602,4 +1638,65 @@ footer {
   .code-panel {
     animation: none;
   }
+}
+
+.shortcut-help {
+  padding: 20px 22px 24px;
+}
+.shortcut-help h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.shortcut-help p {
+  color: var(--subtext0);
+  font-size: 11px;
+}
+.shortcut-group h4 {
+  margin: 14px 0 8px;
+  color: var(--subtext0);
+  font-size: 11px;
+}
+.shortcut-group dl {
+  margin: 0;
+}
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.shortcut-row dd {
+  margin: 0;
+}
+.shortcut-row kbd {
+  display: inline-block;
+  min-width: 34px;
+  padding: 3px 8px;
+  border: 1px solid var(--surface2);
+  border-radius: 4px;
+  background: var(--mantle);
+  font: inherit;
+  text-align: center;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 16px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--surface1);
+}
+.settings-tabs button {
+  padding: 12px 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--subtext0);
+  font-size: 12px;
+}
+.settings-tabs button[data-active] {
+  border-bottom-color: var(--blue);
+  color: var(--text);
 }

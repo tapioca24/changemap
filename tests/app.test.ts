@@ -738,3 +738,136 @@ test("a selected package updates its list on refresh and closes when its files d
   expect(screen.queryByLabelText("Go package service files")).toBeNull();
   expect(screen.queryByLabelText("Go map granularity")).toBeNull();
 });
+
+test("? opens the settings shortcut list and Escape closes settings before the code pane", async () => {
+  api(snapshot("first", "file.ts"));
+  render(createElement(App));
+  fireEvent.click(await screen.findByRole("button", { name: "Open file.ts" }));
+  await screen.findByLabelText("File diff");
+  fireEvent.keyDown(window, { key: "?", shiftKey: true });
+  expect(await screen.findByRole("heading", { name: "Keyboard shortcuts" })).toBeTruthy();
+  expect(screen.getByText("F / 0")).toBeTruthy();
+  expect(screen.getByText("+ / =")).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole("button", { name: "Close settings" }), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(screen.getByLabelText("File diff")).toBeTruthy();
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(screen.queryByLabelText("File diff")).toBeNull();
+});
+
+test("R refreshes, suppresses repeats and ignores browser combinations", async () => {
+  const state = api(snapshot("first", "file.ts"));
+  render(createElement(App));
+  await screen.findByRole("button", { name: "Open file.ts" });
+  fireEvent.keyDown(window, { key: "r", repeat: true });
+  fireEvent.keyDown(window, { key: "r", metaKey: true });
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/refresh")).toHaveLength(0);
+  state.next = snapshot("second", "updated.ts");
+  fireEvent.keyDown(window, { key: "R" });
+  await screen.findByRole("button", { name: "Open updated.ts" });
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/refresh")).toHaveLength(1);
+});
+
+test("C copies the selected path even with the pane closed and reports clipboard failure", async () => {
+  api(snapshot("first", "file.ts"));
+  const writeText = vi.fn(async () => {});
+  vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+  render(createElement(App));
+  await screen.findByRole("button", { name: "Open file.ts" });
+  fireEvent.keyDown(window, { key: "c" });
+  expect(writeText).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Open file.ts" }));
+  fireEvent.keyDown(window, { key: "Escape" });
+  fireEvent.keyDown(window, { key: "C" });
+  await screen.findByText("Copied file.ts");
+  expect(writeText).toHaveBeenCalledWith("file.ts");
+  writeText.mockRejectedValueOnce(new Error("Denied"));
+  fireEvent.keyDown(window, { key: "c" });
+  await screen.findByText("Could not copy path");
+});
+
+test("E opens the selected file using editor availability, including after closing the pane", async () => {
+  api(snapshot("first", "file.ts"));
+  const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (url, init) =>
+    String(url).startsWith("/api/editor?")
+      ? new Response(JSON.stringify({ available: true, path: "file.ts", differs: false }))
+      : originalFetch(url, init),
+  );
+  render(createElement(App));
+  fireEvent.click(await screen.findByRole("button", { name: "Open file.ts" }));
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "Open in editor" }) as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
+  fireEvent.keyDown(window, { key: "Escape" });
+  fireEvent.keyDown(window, { key: "E" });
+  await screen.findByText(/Opened in editor/);
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([url, init]) => String(url).startsWith("/api/editor?") && init?.method === "POST",
+      ),
+  ).toHaveLength(1);
+});
+
+test("settings button opens Display and exposes a shortcuts tab", async () => {
+  api(snapshot("first", "file.ts"));
+  render(createElement(App));
+  fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+  expect(await screen.findByRole("combobox", { name: "Theme" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Keyboard shortcuts" }));
+  expect(await screen.findByRole("heading", { name: "Keyboard shortcuts" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Display" }));
+  expect(await screen.findByRole("combobox", { name: "Theme" })).toBeTruthy();
+});
+
+test("E respects unavailable editor files and C prefers a renamed file's new path", async () => {
+  const original = snapshot("first", "new.ts");
+  const initial = {
+    ...original,
+    graph: {
+      ...original.graph,
+      merged: {
+        ...original.graph.merged,
+        nodes: [{ ...original.graph.merged.nodes[0]!, oldPath: "old.ts" }],
+      },
+    },
+  };
+  api(initial);
+  const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (url, init) =>
+    String(url).startsWith("/api/editor?")
+      ? new Response(
+          JSON.stringify({
+            available: false,
+            path: "new.ts",
+            differs: false,
+            reason: "No editor configured",
+          }),
+        )
+      : originalFetch(url, init),
+  );
+  const writeText = vi.fn(async () => {});
+  vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+  render(createElement(App));
+  fireEvent.click(await screen.findByRole("button", { name: "Open new.ts" }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Open in editor" }).title).toBe(
+      "No editor configured",
+    ),
+  );
+  fireEvent.keyDown(window, { key: "e" });
+  fireEvent.keyDown(window, { key: "c" });
+  await screen.findByText("Copied new.ts");
+  expect(writeText).toHaveBeenCalledWith("new.ts");
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([url, init]) => String(url).startsWith("/api/editor?") && init?.method === "POST",
+      ),
+  ).toHaveLength(0);
+});

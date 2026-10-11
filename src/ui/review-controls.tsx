@@ -1,3 +1,5 @@
+import { Tabs } from "@base-ui/react/tabs";
+import { shortcutGroups } from "./shortcuts.js";
 import { Dialog } from "@base-ui/react/dialog";
 import { Popover } from "@base-ui/react/popover";
 import { Checkbox } from "@base-ui/react/checkbox";
@@ -64,20 +66,29 @@ export function SnapshotDetails({ snapshot }: { snapshot: ReviewSummary }) {
 }
 
 export function SettingsDialog({
+  section,
+  onSectionChange,
+  open,
+  onOpenChange,
   settings,
   ready,
   warning,
   onSettingsChange,
 }: {
+  section: string;
+  onSectionChange(section: string): void;
+  open: boolean;
+  onOpenChange(open: boolean): void;
   settings: Settings;
   ready: boolean;
   warning: string | null;
   onSettingsChange(next: Settings): void;
 }) {
   return (
-    <Dialog.Root>
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Trigger
         className="icon-button settings-trigger"
+        onClick={() => onSectionChange("display")}
         aria-label="Settings"
         title={warning ?? "Settings"}
       >
@@ -99,7 +110,7 @@ export function SettingsDialog({
           <Dialog.Popup className="settings-dialog">
             <header className="dialog-heading">
               <div>
-                <Dialog.Title>Display settings</Dialog.Title>
+                <Dialog.Title>Settings</Dialog.Title>
                 <Dialog.Description>Changes are applied as you choose them.</Dialog.Description>
               </div>
               <Dialog.Close className="icon-button" aria-label="Close settings">
@@ -111,95 +122,124 @@ export function SettingsDialog({
                 {warning}
               </p>
             )}
-            <div className="settings-content">
-              <label className="settings-field">
-                Theme
-                <span className="settings-select-wrap">
-                  <select
-                    value={settings.theme}
-                    disabled={!ready}
-                    onChange={(event) =>
-                      onSettingsChange({
-                        ...settings,
-                        theme: event.target.value as Settings["theme"],
-                      })
-                    }
-                  >
-                    {themes.map((theme) => (
-                      <option key={theme} value={theme}>
-                        {themeName(theme)}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown aria-hidden="true" />
-                </span>
-              </label>
-              <label className="settings-field">
-                Graph direction
-                <span className="settings-select-wrap">
-                  <select
-                    value={settings.orientation}
-                    disabled={!ready}
-                    onChange={(event) =>
-                      onSettingsChange({
-                        ...settings,
-                        orientation: event.target.value as Settings["orientation"],
-                      })
-                    }
-                  >
-                    {orientations.map((direction) => (
-                      <option key={direction} value={direction}>
-                        {
+            <Tabs.Root value={section} onValueChange={(value) => onSectionChange(String(value))}>
+              <Tabs.List className="settings-tabs" aria-label="Settings sections">
+                <Tabs.Tab value="display">Display</Tabs.Tab>
+                <Tabs.Tab value="shortcuts">Keyboard shortcuts</Tabs.Tab>
+              </Tabs.List>
+              <Tabs.Panel value="display" className="settings-content">
+                <label className="settings-field">
+                  Theme
+                  <span className="settings-select-wrap">
+                    <select
+                      value={settings.theme}
+                      disabled={!ready}
+                      onChange={(event) =>
+                        onSettingsChange({
+                          ...settings,
+                          theme: event.target.value as Settings["theme"],
+                        })
+                      }
+                    >
+                      {themes.map((theme) => (
+                        <option key={theme} value={theme}>
+                          {themeName(theme)}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown aria-hidden="true" />
+                  </span>
+                </label>
+                <label className="settings-field">
+                  Graph direction
+                  <span className="settings-select-wrap">
+                    <select
+                      value={settings.orientation}
+                      disabled={!ready}
+                      onChange={(event) =>
+                        onSettingsChange({
+                          ...settings,
+                          orientation: event.target.value as Settings["orientation"],
+                        })
+                      }
+                    >
+                      {orientations.map((direction) => (
+                        <option key={direction} value={direction}>
                           {
-                            LR: "Left → Right",
-                            TB: "Top → Bottom",
-                            RL: "Right → Left",
-                            BT: "Bottom → Top",
-                          }[direction]
-                        }
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown aria-hidden="true" />
-                </span>
-              </label>
-              <label className="whitespace-choice">
-                <Checkbox.Root
-                  checked={settings.groupByDirectory}
-                  disabled={!ready}
-                  onCheckedChange={(checked) =>
-                    onSettingsChange({ ...settings, groupByDirectory: checked === true })
-                  }
-                  className="settings-checkbox"
-                >
-                  <Checkbox.Indicator className="settings-checkbox-indicator">
-                    <Check aria-hidden="true" />
-                  </Checkbox.Indicator>
-                </Checkbox.Root>
-                <span>
-                  <strong>Group files by directory</strong>
-                </span>
-              </label>
-              <label className="settings-field">
-                Code font size
-                <span className="settings-select-wrap">
-                  <select
-                    value={settings.codeFontSize}
+                            {
+                              LR: "Left → Right",
+                              TB: "Top → Bottom",
+                              RL: "Right → Left",
+                              BT: "Bottom → Top",
+                            }[direction]
+                          }
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown aria-hidden="true" />
+                  </span>
+                </label>
+                <label className="whitespace-choice">
+                  <Checkbox.Root
+                    checked={settings.groupByDirectory}
                     disabled={!ready}
-                    onChange={(event) =>
-                      onSettingsChange({ ...settings, codeFontSize: Number(event.target.value) })
+                    onCheckedChange={(checked) =>
+                      onSettingsChange({ ...settings, groupByDirectory: checked === true })
                     }
+                    className="settings-checkbox"
                   >
-                    {Array.from({ length: 15 }, (_, i) => i + 10).map((size) => (
-                      <option key={size} value={size}>
-                        {size}px
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown aria-hidden="true" />
-                </span>
-              </label>
-            </div>
+                    <Checkbox.Indicator className="settings-checkbox-indicator">
+                      <Check aria-hidden="true" />
+                    </Checkbox.Indicator>
+                  </Checkbox.Root>
+                  <span>
+                    <strong>Group files by directory</strong>
+                  </span>
+                </label>
+                <label className="settings-field">
+                  Code font size
+                  <span className="settings-select-wrap">
+                    <select
+                      value={settings.codeFontSize}
+                      disabled={!ready}
+                      onChange={(event) =>
+                        onSettingsChange({ ...settings, codeFontSize: Number(event.target.value) })
+                      }
+                    >
+                      {Array.from({ length: 15 }, (_, i) => i + 10).map((size) => (
+                        <option key={size} value={size}>
+                          {size}px
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown aria-hidden="true" />
+                  </span>
+                </label>
+              </Tabs.Panel>
+              <Tabs.Panel
+                value="shortcuts"
+                className="shortcut-help"
+                aria-labelledby="shortcut-heading"
+              >
+                <h3 id="shortcut-heading">Keyboard shortcuts</h3>
+                <p>Available outside text fields and dialogs.</p>
+                {shortcutGroups.map((group) => (
+                  <div className="shortcut-group" key={group.title}>
+                    <h4>{group.title}</h4>
+                    <dl>
+                      {group.shortcuts.map(([key, action]) => (
+                        <div className="shortcut-row" key={key}>
+                          <dt>{action}</dt>
+                          <dd>
+                            <kbd>{key}</kbd>
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                ))}
+              </Tabs.Panel>
+            </Tabs.Root>
           </Dialog.Popup>
         </Dialog.Viewport>
       </Dialog.Portal>

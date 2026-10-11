@@ -100,6 +100,27 @@ ports in order (up to 100 ports total) and prints the URL it actually uses.
 - The map and code stay fixed after capture. When files change, use **Refresh
   comparison** to replace them; a failed refresh keeps the previous comparison.
 
+### Keyboard shortcuts
+
+Open **Settings** to see the shortcut list, or press **?**. Shortcuts are inactive
+while typing in a text field or interacting with a dialog. Letter keys work in
+uppercase or lowercase; Ctrl, Command, and Alt combinations are left to the browser.
+
+| Key        | Action                                                   |
+| ---------- | -------------------------------------------------------- |
+| `-`        | Zoom out                                                 |
+| `+` or `=` | Zoom in                                                  |
+| `F` or `0` | Fit the entire graph                                     |
+| `R`        | Refresh comparison                                       |
+| `Esc`      | Close the code pane                                      |
+| `E`        | Open the selected file in an editor                      |
+| `C`        | Copy the selected file path (new path for renamed files) |
+| `?`        | Open Settings and show keyboard shortcuts                |
+
+`E` and `C` require a selected file. The editor must be configured and the working
+tree file must be available. The zoom controls show the current percentage between
+**−** and **+**, followed by **Fit**.
+
 ### Open files in an editor
 
 Set `VISUAL` or `EDITOR` to an editor command, or pass `--editor` to override

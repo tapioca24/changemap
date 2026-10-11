@@ -1,3 +1,5 @@
+import { useShortcuts } from "./shortcuts.js";
+import { useEditorFile } from "./file-actions.js";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { ReviewSummary } from "../shared/review.js";
 import type { Settings } from "../shared/settings.js";
@@ -110,6 +112,8 @@ export function Workspace({
   const closeButton = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const node = snapshot.graph.merged.nodes.find((file) => file.id === selected);
+  const editorActions = useEditorFile(snapshot.id, node);
+  const [copyResult, setCopyResult] = useState("");
   const open = paneOpen && (showPackageFiles ? !!activePackage : !!node);
   const narrow = width > 0 && width < 960;
   const graphMinimum = 320;
@@ -163,6 +167,35 @@ export function Workspace({
     setPaneOpen(false);
     requestAnimationFrame(() => returnFocus.current?.isConnected && returnFocus.current.focus());
   }
+  async function copySelectedPath(path: string) {
+    try {
+      await navigator.clipboard.writeText(path);
+      setCopyResult(`Copied ${path}`);
+    } catch {
+      setCopyResult("Could not copy path");
+    }
+  }
+  useShortcuts((key, event) => {
+    if (key === "escape" && open) {
+      close();
+      return true;
+    }
+    if (!node || showPackageFiles) return;
+    if (key === "e") {
+      if (!event.repeat) {
+        setPaneOpen(true);
+        void editorActions.openInEditor();
+      }
+      return true;
+    }
+    if (key === "c") {
+      if (!event.repeat) {
+        const path = node.newPath ?? node.oldPath;
+        if (path) void copySelectedPath(path);
+      }
+      return true;
+    }
+  });
   function resize(next: number) {
     setPreferences((current) => ({
       ...current,
@@ -176,6 +209,9 @@ export function Workspace({
       className={`workspace${open ? " pane-open" : ""}${resizing ? " resizing" : ""}`}
       style={{ "--pane-width": `${paneWidth}px` } as CSSProperties}
     >
+      <span className="sr-only" role="status">
+        {copyResult}
+      </span>
       <section className="map-pane" aria-label="Change map" inert={narrow && open}>
         {hasGo && (
           <div className="map-toolbar go-map-toolbar">
@@ -281,6 +317,7 @@ export function Workspace({
                 )}
                 <CodePane
                   key={node.id}
+                  editorActions={editorActions}
                   snapshot={snapshot}
                   node={node}
                   display={preferences.display}

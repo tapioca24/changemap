@@ -1,8 +1,11 @@
+import { Minus, Plus, Maximize } from "lucide-react";
+import { useShortcuts } from "./shortcuts.js";
 import { memo, useCallback, useMemo, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ReactFlow,
   Background,
-  Controls,
+  Panel,
+  useViewport,
   Handle,
   Position,
   MarkerType,
@@ -28,6 +31,59 @@ import type { MergedFileNode, ReviewGraph } from "../graph/model.js";
 import type { Settings } from "../shared/settings.js";
 import "@xyflow/react/dist/style.css";
 import { StatusBadge, statusLabels } from "./status-badge.js";
+
+export function GraphControls({ suspended = false }: { suspended?: boolean }) {
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const { zoom } = useViewport();
+  useShortcuts((key) => {
+    if (suspended) return;
+    if (key === "-") {
+      void zoomOut();
+      return true;
+    }
+    if (key === "+" || key === "=") {
+      void zoomIn();
+      return true;
+    }
+    if (key === "f" || key === "0") {
+      void fitView();
+      return true;
+    }
+  });
+  return (
+    <Panel position="bottom-left" className="graph-controls" aria-label="Graph controls">
+      <button
+        type="button"
+        aria-label="Zoom out"
+        title="Zoom out (−)"
+        onClick={() => void zoomOut()}
+        disabled={zoom <= 0.08}
+      >
+        <Minus aria-hidden="true" />
+      </button>
+      <output aria-label="Zoom level">{Math.round(zoom * 100)}%</output>
+      <button
+        type="button"
+        aria-label="Zoom in"
+        title="Zoom in (+ / =)"
+        onClick={() => void zoomIn()}
+        disabled={zoom >= 2}
+      >
+        <Plus aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="fit-graph"
+        aria-label="Fit graph"
+        title="Fit graph (F / 0)"
+        onClick={() => void fitView()}
+      >
+        <Maximize aria-hidden="true" />
+        <span>Fit</span>
+      </button>
+    </Panel>
+  );
+}
 
 export { statusLabels } from "./status-badge.js";
 export function references(graph: ReviewGraph, node: MergedFileNode) {
@@ -545,7 +601,7 @@ export const Graph = memo(function Graph({
           suspended={suspended}
         />
         <Background color="var(--surface1)" gap={22} />
-        <Controls showInteractive={false} />
+        <GraphControls suspended={suspended} />
       </ReactFlow>
       {!nodes.length && <p className="canvas-empty">No analyzed files in this comparison.</p>}
     </div>
