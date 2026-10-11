@@ -17,6 +17,7 @@ import {
 import {
   layoutMap,
   type DirectoryNodeData,
+  type OtherFilesNodeData,
   type FileNodeData,
   type PackageNodeData,
 } from "./layout.js";
@@ -61,7 +62,9 @@ const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileNodeData>>)
         }
       }}
     >
-      <Handle type="target" position={target} />
+      {(data.file.analyzed.before || data.file.analyzed.after) && (
+        <Handle type="target" position={target} />
+      )}
       {data.file.status !== "unchanged" && <StatusBadge status={data.file.status} />}
       <strong title={path}>{path.split("/").pop()}</strong>
       {data.directoryPath && (
@@ -70,7 +73,9 @@ const FileNode = memo(function FileNode({ data }: NodeProps<Node<FileNodeData>>)
         </span>
       )}
       {data.unresolved && <span className="unresolved">! Unresolved references</span>}
-      <Handle type="source" position={source} />
+      {(data.file.analyzed.before || data.file.analyzed.after) && (
+        <Handle type="source" position={source} />
+      )}
     </div>
   );
 });
@@ -116,7 +121,22 @@ const PackageNode = memo(function PackageNode({ data }: NodeProps<Node<PackageNo
     </div>
   );
 });
-const nodeTypes = { file: FileNode, package: PackageNode, directory: DirectoryNode };
+const OtherFilesNode = memo(function OtherFilesNode({ data }: NodeProps<Node<OtherFilesNodeData>>) {
+  return (
+    <div className="other-files-node">
+      <strong>
+        Other files <span>{data.count}</span>
+      </strong>
+      <p>Outside dependency analysis</p>
+    </div>
+  );
+});
+const nodeTypes = {
+  file: FileNode,
+  package: PackageNode,
+  directory: DirectoryNode,
+  "other-files": OtherFilesNode,
+};
 export function DependencyEdge({
   id,
   data,
@@ -368,11 +388,19 @@ export const Graph = memo(function Graph({
   } | null>(null);
   const { nodes, routes, fileBounds, failed } = useMemo(() => {
     try {
-      return { ...layoutMap(map, direction, groupByDirectory), failed: false };
+      return {
+        ...layoutMap(
+          map,
+          direction,
+          groupByDirectory,
+          graph.merged.nodes.filter((file) => !file.analyzed.before && !file.analyzed.after),
+        ),
+        failed: false,
+      };
     } catch {
       return { nodes: [], routes: [], fileBounds: new Map(), failed: true };
     }
-  }, [map, direction, groupByDirectory]);
+  }, [map, direction, groupByDirectory, graph.merged.nodes]);
   const selectableNodes = useMemo(
     () =>
       nodes.map((node) =>
@@ -469,13 +497,11 @@ export const Graph = memo(function Graph({
             }}
           >
             <option value="">Select a file</option>
-            {graph.merged.nodes
-              .filter((node) => node.analyzed.before || node.analyzed.after)
-              .map((node) => (
-                <option key={node.id} value={node.id}>
-                  {statusLabels[node.status]} · {node.newPath ?? node.oldPath}
-                </option>
-              ))}
+            {graph.merged.nodes.map((node) => (
+              <option key={node.id} value={node.id}>
+                {statusLabels[node.status]} · {node.newPath ?? node.oldPath}
+              </option>
+            ))}
           </select>
         </label>
       </div>

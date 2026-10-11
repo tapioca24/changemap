@@ -29,6 +29,7 @@ export interface Settings {
   theme: (typeof themes)[number];
   orientation: (typeof orientations)[number];
   groupByDirectory: boolean;
+  codeFontSize: number;
 }
 export interface SettingsState {
   settings: Settings;
@@ -38,6 +39,7 @@ export const defaults: Settings = {
   theme: "catppuccin-mocha",
   orientation: "LR",
   groupByDirectory: true,
+  codeFontSize: 12,
 };
 export function validSettings(value: unknown): value is Settings {
   if (!value || typeof value !== "object") return false;
@@ -45,6 +47,9 @@ export function validSettings(value: unknown): value is Settings {
   return (
     themes.includes(record.theme as Settings["theme"]) &&
     orientations.includes(record.orientation as Settings["orientation"]) &&
-    typeof record.groupByDirectory === "boolean"
+    typeof record.groupByDirectory === "boolean" &&
+    Number.isInteger(record.codeFontSize) &&
+    (record.codeFontSize as number) >= 10 &&
+    (record.codeFontSize as number) <= 24
   );
 }

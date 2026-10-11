@@ -386,9 +386,15 @@ test("settings API validates requests, saves explicitly, and restores on server 
     theme: "catppuccin-mocha",
     orientation: "LR",
     groupByDirectory: true,
+    codeFontSize: 12,
   });
   await expect(readFile(path)).rejects.toMatchObject({ code: "ENOENT" });
-  const settings = { theme: "kanagawa-lotus", orientation: "RL", groupByDirectory: false };
+  const settings = {
+    theme: "kanagawa-lotus",
+    orientation: "RL",
+    groupByDirectory: false,
+    codeFontSize: 18,
+  };
   expect(
     (await request("/api/settings", { method: "POST", body: JSON.stringify(settings) })).status,
   ).toBe(403);

@@ -162,6 +162,8 @@ test.each(["LR", "RL", "TB", "BT"] as const)(
       "moved",
       "deleted",
       "root.ts",
+      "other-files",
+      "hidden.ts",
     ]);
     expect(nodes.find((node) => node.id === "directory:src/deep")?.parentId).toBe("directory:src");
     expect(nodes.find((node) => node.id === "moved")?.parentId).toBe("directory:src/deep");
@@ -794,4 +796,62 @@ test("mixed file states keep names visible with badges only on changed nodes", (
     );
   }
   expect(container.querySelector(".react-flow__node.selected .file-node.renamed")).toBeTruthy();
+});
+
+test.each(["LR", "RL", "TB", "BT"] as const)(
+  "Other files sit inside the graph below dependencies in %s",
+  (direction) => {
+    const other = { ...file("docs/README.md"), analyzed: { before: false, after: false } };
+    const graph = {
+      ...snapshot.graph,
+      merged: { ...snapshot.graph.merged, nodes: [...snapshot.graph.merged.nodes, other] },
+    };
+    for (const grouped of [true, false]) {
+      const { nodes, routes, fileBounds } = layoutElements(graph, direction, grouped);
+      const area = nodes.find((node) => node.type === "other-files")!;
+      const child = nodes.find((node) => node.id === other.id)!;
+      expect(child.parentId).toBe(area.id);
+      for (const node of nodes.filter((node) => !node.parentId && node.id !== area.id)) {
+        expect(area.position.y).toBeGreaterThan(node.position.y + node.height!);
+      }
+      expect(fileBounds.get(other.id)?.position.y).toBe(area.position.y + child.position.y);
+      expect(routes).toEqual(layoutElements(snapshot.graph, direction, grouped).routes);
+    }
+  },
+);
+
+test("an unanalyzed-only graph groups every file and supports keyboard selection", () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  const files = ["README.md", "docs/example.txt"].map((id) => ({
+    ...file(id),
+    analyzed: { before: false, after: false },
+  }));
+  const graph = { ...snapshot.graph, merged: { nodes: files, edges: [] } };
+  const onSelect = vi.fn();
+  const { container } = render(
+    createElement(Graph, {
+      graph,
+      direction: "LR",
+      groupByDirectory: true,
+      selected: files[1].id,
+      onSelect,
+    }),
+  );
+  expect(container.querySelector(".react-flow__node-other-files")?.textContent).toContain(
+    "Other files",
+  );
+  expect(screen.queryByText("No analyzed files in this comparison.")).toBeNull();
+  expect(container.querySelector(".react-flow__node.selected")?.getAttribute("data-id")).toBe(
+    files[1].id,
+  );
+  expect(container.querySelector(".react-flow__handle")).toBeNull();
+  fireEvent.keyDown(screen.getByRole("button", { name: "Open README.md" }), { key: "Enter" });
+  expect(onSelect).toHaveBeenCalledWith(files[0].id);
 });

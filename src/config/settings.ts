@@ -23,6 +23,7 @@ export class SettingsStore {
         theme: value.theme,
         orientation: value.orientation,
         groupByDirectory: value.groupByDirectory,
+        codeFontSize: value.codeFontSize,
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {

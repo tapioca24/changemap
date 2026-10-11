@@ -14,6 +14,7 @@ export type FileNodeData = {
 };
 
 export type DirectoryNodeData = { path: string; name: string };
+export type OtherFilesNodeData = { count: number };
 export type PackageNodeData = {
   package: MapPackage;
   direction: Settings["orientation"];
@@ -22,7 +23,8 @@ export type PackageNodeData = {
 export type LayoutNode =
   | Node<FileNodeData, "file">
   | Node<PackageNodeData, "package">
-  | Node<DirectoryNodeData, "directory">;
+  | Node<DirectoryNodeData, "directory">
+  | Node<OtherFilesNodeData, "other-files">;
 
 const fileWidth = 230;
 const fileHeight = 108;
@@ -90,6 +92,7 @@ export function layoutMap(
   map: MapModel,
   direction: Settings["orientation"],
   groupByDirectory = true,
+  otherFiles: readonly MergedFileNode[] = [],
 ) {
   const files = [...map.nodes];
   const directories = new Set<string>();
@@ -289,7 +292,67 @@ export function layoutMap(
       ariaLabel: `${path}, ${file.file.status}`,
     };
   });
-  return { nodes: [...directoryNodes, ...fileNodes], routes, fileBounds };
+  const nodes = [...directoryNodes, ...fileNodes];
+  if (otherFiles.length) {
+    const gap = 24;
+    const padding = 24;
+    const headerHeight = 64;
+    const right = nodes
+      .filter((node) => !node.parentId)
+      .reduce((max, node) => Math.max(max, node.position.x + node.width!), 0);
+    const bottom = nodes
+      .filter((node) => !node.parentId)
+      .reduce((max, node) => Math.max(max, node.position.y + node.height!), 0);
+    const columns = Math.min(
+      otherFiles.length,
+      6,
+      Math.max(
+        1,
+        right
+          ? Math.floor((right - padding * 2 + gap) / (fileWidth + gap))
+          : Math.ceil(Math.sqrt(otherFiles.length)),
+      ),
+    );
+    const width = padding * 2 + columns * fileWidth + (columns - 1) * gap;
+    const height = headerHeight + Math.ceil(otherFiles.length / columns) * (fileHeight + gap);
+    const position = { x: 35, y: nodes.length ? bottom + 80 : 35 };
+    const id = "other-files";
+    nodes.push({
+      id,
+      type: "other-files",
+      position,
+      data: { count: otherFiles.length },
+      ariaLabel: `Other files, ${otherFiles.length} files outside dependency analysis`,
+      selectable: false,
+      focusable: false,
+      width,
+      height,
+      style: { width, height },
+    });
+    otherFiles.forEach((file, index) => {
+      const path = file.newPath ?? file.oldPath!;
+      const relativePosition = {
+        x: padding + (index % columns) * (fileWidth + gap),
+        y: headerHeight + Math.floor(index / columns) * (fileHeight + gap),
+      };
+      nodes.push({
+        id: file.id,
+        type: "file",
+        parentId: id,
+        position: relativePosition,
+        width: fileWidth,
+        height: fileHeight,
+        data: { file, path, direction, directoryPath: parentPath(path), unresolved: false },
+        ariaLabel: `${path}, ${file.status}`,
+      });
+      fileBounds.set(file.id, {
+        position: { x: position.x + relativePosition.x, y: position.y + relativePosition.y },
+        width: fileWidth,
+        height: fileHeight,
+      });
+    });
+  }
+  return { nodes, routes, fileBounds };
 }
 
 export function layoutElements(
@@ -297,7 +360,12 @@ export function layoutElements(
   direction: Settings["orientation"],
   groupByDirectory = true,
 ) {
-  return layoutMap(createMapModel(graph, "files"), direction, groupByDirectory);
+  return layoutMap(
+    createMapModel(graph, "files"),
+    direction,
+    groupByDirectory,
+    graph.merged.nodes.filter((file) => !file.analyzed.before && !file.analyzed.after),
+  );
 }
 
 export function layoutGraph(

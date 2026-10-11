@@ -112,6 +112,7 @@ async function testServer(installed) {
       theme: "catppuccin-mocha",
       orientation: "LR",
       groupByDirectory: true,
+      codeFontSize: 12,
     });
     assert.equal(existsSync(config), false);
     const saved = await fetch(`${url}/api/settings`, {
@@ -121,11 +122,13 @@ async function testServer(installed) {
         theme: "catppuccin-latte",
         orientation: "BT",
         groupByDirectory: false,
+        codeFontSize: 18,
       }),
     }).then((response) => response.json());
     assert.equal(saved.warning, null);
     assert.match(readFileSync(config, "utf8"), /theme = "catppuccin-latte"/);
     assert.match(readFileSync(config, "utf8"), /groupByDirectory = false/);
+    assert.match(readFileSync(config, "utf8"), /codeFontSize = 18/);
     const snapshot = await fetch(`${url}/api/snapshot`).then((response) => response.json());
     assert.ok(snapshot.changes.some((change) => change.newPath === "example.ts"));
     assert.deepEqual(snapshot.graph.after.edges, [
