@@ -12,7 +12,7 @@ Understand code changes through file dependency maps.
 Review local Git changes in your browser. See which TypeScript and Go files depend on
 changed code, follow added or removed dependencies, and read diffs alongside the map.
 
-![Current review screen: checkout.ts switches from legacy-discount.ts to discount.ts, with added and deleted dependencies beside its code diff.](https://raw.githubusercontent.com/tapioca24/changemap/main/.github/assets/changemap.png)
+![Checkout review with 12 connected files: pricing.ts switches discount modules and adds tax calculation, with added and deleted dependencies beside its code diff.](https://raw.githubusercontent.com/tapioca24/changemap/main/.github/assets/changemap.png)
 
 ## Quick start
 
